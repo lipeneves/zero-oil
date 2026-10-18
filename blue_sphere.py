@@ -1,4 +1,4 @@
-"""Blue Sphere - Barco Catador de Lixo, em Pygame puro.
+"""Zero Oil - Barco Catador de Lixo, em Pygame puro.
 
 Releitura da fase especial do Sonic 3 & Knuckles: um barco limpando um rio
 poluido. O jogo so desenha imagens (pasta assets/): o chao de agua e esticado em
@@ -1389,7 +1389,7 @@ class App:
         scr.blit(shade_, (30, 30))
         y = 60
         if self.mode == "credits":
-            self.text("RIO LIMPO", self.title, (W // 2, y), (150, 255, 200))
+            self.text("ZERO OIL", self.title, (W // 2, y), (150, 255, 200))
             y += 44
         for line, kind in (HOWTO if self.mode == "howto" else CREDITS):
             if kind is None:
@@ -1405,7 +1405,7 @@ class App:
 def main():
     pygame.init()
     screen = pygame.display.set_mode((W, H))
-    pygame.display.set_caption("Rio Limpo")
+    pygame.display.set_caption("Zero Oil")
     clock = pygame.time.Clock()
     app = App(screen)
     while True:

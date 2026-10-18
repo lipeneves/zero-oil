@@ -348,7 +348,7 @@ def make_logo():
     """Titulo do jogo (troque por um logo desenhado se quiser)."""
     font = pygame.font.SysFont("arialblack,arial", 64, bold=True)
     sub = pygame.font.SysFont("arial", 22, bold=True)
-    title = "RIO LIMPO"
+    title = "ZERO OIL"
     w, h = 460, 150
     s = pygame.Surface((w, h), pygame.SRCALPHA)
     shadow = font.render(title, True, (5, 30, 60))
