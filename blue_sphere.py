@@ -86,7 +86,7 @@ POPUP_LIFT = 0.15     # altura do marcador de reciclagem acima da agua (casas), 
 DOCK_CLEAR = 2        # casas livres em volta da estacao (mais 3 na frente da vaga)
 LIVES_START = 3       # barcos no inicio da corrida
 BELT_TIME = 0.45      # segundos que o oleo recolhido leva para descer a esteira ate a cacamba
-FISH_SCALE = 0.5      # tamanho do peixe em relacao a casa (1 = a casa toda)
+FISH_SCALE = 0.62     # tamanho do peixe em relacao a casa (1 = a casa toda)
 LIGHT_BLINK = 0.8     # a luz em cima do barco pisca a cada 0.8 s (acesa na primeira metade)
 LIVES_MAX = 5
 CAPACITY = 16       # itens que cabem na cacamba
@@ -280,16 +280,17 @@ class Game:
             BUOY: [load_image("boia.png")],
             SPOUT: [load_image("jato.png")],
             TRASH: [load_image(n) for n in ("garrafa.png", "sacola.png", "lata_vermelha.png", "lata_prateada.png")],
-            FISH: [load_image("peixe.png"), load_image("peixe_nadando.png")],
+            FISH: [load_image("base/peixe.svg", (96, 96)), load_image("base/peixe_nadando.svg", (96, 72))],
         }
         self.img = {n: load_image(n + ".png") for n in (
             "onda", "sombra", "seta_guia", "painel", "bussola", "bussola_seta",
             "minimapa", "menu_painel")}
         # a torre vem direto do svg, num tamanho grande para ficar nitida de perto
         # chao da estacao: 56 px por casa, como a textura da agua (3 x 4,5 casas)
-        self.img["estacao_chao"] = load_image("estacao_chao.svg", (3 * WATER_PPC, 9 * WATER_PPC // 2))
+        self.img["estacao_chao"] = load_image("base/estacao_chao.svg", (3 * WATER_PPC, 9 * WATER_PPC // 2))
         # marcador da estacao: bolha verde com o simbolo de reciclagem e o contador "0/x"
-        self.img["popup_contador"] = load_image("popup_contador.svg", (240, 120))
+        self.img["popup_contador"] = load_image("base/popup_contador.svg", (240, 120))
+        self.img["coracao"] = load_image("base/coracao.svg", (28, 26))  # vidas no placar
         self.popup_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 44)
         self.popup_cache = {}
         self.slicks = [load_image("mancha_%d.png" % i) for i in range(1, 5)]
@@ -1064,10 +1065,8 @@ class Game:
         scr.blit(self.img["painel"], (40, 18))
         self.text(f"{max(0, self.litter_left):03d}", self.font, (100, 41))
         scr.blit(self.scaled(("mancha", 0), self.slicks[0], 38, 30), (157, 26))
-        boat = self.boat_frames[0]
-        boat = boat.subsurface(boat.get_bounding_rect())  # so o barco, sem a margem da espuma
-        icon = self.scaled(("vida",), boat, round(26 * boat.get_width() / boat.get_height()), 26)
-        for i in range(self.lives):  # barcos restantes
+        icon = self.img["coracao"]
+        for i in range(self.lives):  # coracoes = vidas restantes
             scr.blit(icon, (46 + i * (icon.get_width() + 6), 68))
         # pontos e recorde
         scr.blit(self.img["painel"], (W - 200, 18))

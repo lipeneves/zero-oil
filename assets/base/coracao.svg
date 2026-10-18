@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="92" viewBox="0 0 100 92">
+  <title>coracao.svg</title>
+  <!-- vida do jogador no placar: coracao vermelho no estilo cartoon do barco
+       (contorno escuro grosso e um brilho claro no lado de cima a esquerda) -->
+  <path d="M50 85 C50 85 5 58 5 30 C5 14 17 5 30 5 C40 5 47 11 50 19 C53 11 60 5 70 5 C83 5 95 14 95 30 C95 58 50 85 50 85 Z" fill="#e8434b" stroke="#20242b" stroke-width="6" stroke-linejoin="round"/>
+  <!-- sombra na parte de baixo, para dar volume -->
+  <path d="M84 46 C77 60 62 71 50 78" fill="none" stroke="#b52a35" stroke-width="7" stroke-linecap="round"/>
+  <!-- brilho -->
+  <path d="M17 33 C16 23 22 16 31 15" fill="none" stroke="#ff9ea6" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="17" cy="42" r="3.5" fill="#ff9ea6"/>
+</svg>

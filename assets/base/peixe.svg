@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <title>peixe.svg</title>
+  <!-- peixe pulando, virado para a direita, no estilo cartoon do barco: laranja com
+       contorno escuro grosso, barriga clara e brilho em cima. O jogo gira e espelha. -->
+  <g stroke="#20242b" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- barbatana de cima e rabo (atras do corpo) -->
+    <path d="M38 40 Q44 20 62 23 Q59 31 63 40 Z" fill="#e8650f"/>
+    <path d="M30 52 L8 33 Q15 52 8 71 Z" fill="#e8650f"/>
+    <!-- corpo -->
+    <ellipse cx="52" cy="52" rx="28" ry="17" fill="#ff8c1e"/>
+  </g>
+  <!-- barriga clara -->
+  <ellipse cx="55" cy="61" rx="17" ry="4.5" fill="#ffd28e"/>
+  <!-- brilho -->
+  <path d="M48 41 Q60 37 71 41" fill="none" stroke="#ffc98a" stroke-width="5" stroke-linecap="round"/>
+  <!-- guelra -->
+  <path d="M40 43 Q46 52 40 61" fill="none" stroke="#c4520b" stroke-width="4" stroke-linecap="round"/>
+  <!-- olho e boca -->
+  <circle cx="66" cy="47" r="6.5" fill="#ffffff" stroke="#20242b" stroke-width="3"/>
+  <circle cx="67.5" cy="47.5" r="3" fill="#20242b"/>
+  <circle cx="68.6" cy="46.2" r="1.1" fill="#ffffff"/>
+  <path d="M73 57 Q76.5 59.5 79 56" fill="none" stroke="#20242b" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

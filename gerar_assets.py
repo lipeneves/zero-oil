@@ -3,7 +3,7 @@
 O jogo (blue_sphere.py) so desenha imagens prontas. Este script cria a arte
 padrao, de duas formas:
 
-  * sprites simples (boia, peixe, jato, manchas, placar...), desenhados com
+  * sprites simples (boia, jato, manchas, placar...), desenhados com
     as primitivas do pygame;
   * quadros do barco (de costas: parado, no ar e andando), renderizados a
     partir de um modelo 3D feito a mao (sprites pre-renderizados, como nos
@@ -112,30 +112,6 @@ def make_beam():
     return s
 
 
-def make_fish():
-    s = pygame.Surface((96, 96), pygame.SRCALPHA)
-    pygame.draw.polygon(s, (235, 105, 20), [(26, 51), (6, 36), (12, 51), (6, 66)])
-    pygame.draw.polygon(s, (235, 105, 20), [(38, 40), (50, 26), (60, 40)])
-    pygame.draw.ellipse(s, (255, 140, 30), (22, 36, 52, 30))
-    pygame.draw.ellipse(s, (255, 205, 130), (30, 52, 36, 10))
-    pygame.draw.arc(s, (255, 255, 255), (36, 38, 14, 26), -1.2, 1.2, 3)
-    pygame.draw.circle(s, (255, 255, 255), (62, 47), 5)
-    pygame.draw.circle(s, (20, 20, 20), (63, 47), 2)
-    return s
-
-
-def make_fish_swim():
-    """Peixe nadando debaixo d'agua: silhueta escura com a barbatana de fora."""
-    s = pygame.Surface((96, 72), pygame.SRCALPHA)
-    mask = pygame.mask.from_surface(make_fish())
-    shadow = mask.to_surface(setcolor=(15, 35, 30, 150), unsetcolor=(0, 0, 0, 0))
-    s.blit(pygame.transform.smoothscale(shadow, (96, 48)), (0, 24))
-    fin = [(38, 48), (57, 48), (44, 26)]
-    pygame.draw.polygon(s, (235, 105, 20), fin)
-    pygame.draw.polygon(s, (120, 50, 10), fin, 1)
-    return s
-
-
 def make_buoy():
     s = pygame.Surface((96, 96), pygame.SRCALPHA)
     red, white = (215, 30, 30), (245, 245, 245)
@@ -162,9 +138,6 @@ def make_spout():
     return s
 
 
-OIL_RGB = (43, 39, 51)  # = OIL_SVG (#2b2733), mas aqui o modulo ainda nao o conhece
-
-
 def _smooth_closed(pts, steps=16):
     """Curva fechada suave (Catmull-Rom) passando pelos pontos."""
     out = []
@@ -180,10 +153,14 @@ def _smooth_closed(pts, steps=16):
     return out
 
 
+SLICK_FILL = (8, 8, 10)    # oleo preto
+SLICK_LINE = (32, 36, 43)  # contorno escuro do estilo cartoon (#20242b)
+
+
 def make_slick(seed):
-    """Mancha de oleo vista de cima: uma poca escura, lisa, sem textura nem contorno, de formato
-    irregular (cada semente tem um tamanho e um jeito de borda). Desenhada 4x maior e reduzida,
-    para a borda ficar suave. A imagem inteira equivale a 1 casa."""
+    """Mancha de oleo vista de cima: poca preta de formato irregular (cada semente tem um
+    tamanho e um jeito de borda), com o contorno escuro do estilo cartoon. Desenhada 4x
+    maior e reduzida, para a borda ficar suave. A imagem inteira equivale a 1 casa."""
     size, k = 128, 4
     big = size * k
     rnd = random.Random(seed)
@@ -199,7 +176,10 @@ def make_slick(seed):
     blob = _smooth_closed(ctrl)
 
     s = pygame.Surface((big, big), pygame.SRCALPHA)
-    pygame.draw.polygon(s, OIL_RGB + (255,), blob)
+    line = 12  # contorno: ~3 px na imagem final
+    pygame.draw.polygon(s, SLICK_LINE + (255,), blob)
+    inner = [(c + (x - c) * (1 - line / base), c + (y - c) * (1 - line / base)) for x, y in blob]
+    pygame.draw.polygon(s, SLICK_FILL + (255,), inner)
     return pygame.transform.smoothscale(s, (size, size))
 
 
@@ -476,7 +456,7 @@ def boat_frames():
 
 
 # --- barco a partir do barco-cartoon.svg (arte vetorizada) -----------------------
-BOAT_SVG = "barco-cartoon.svg"
+BOAT_SVG = "base/barco-cartoon.svg"
 BOAT_SVG_TOP = 2  # margem em cima do quadro (px)
 BOAT_SVG_SIZE, BOAT_SVG_ANCHOR = (260, 340), (130.0, 102.7)  # quadro e apoio no barco.json
 BOAT_SVG_STERN = 458.0  # linha da popa no desenho (onde a esteira comeca)
@@ -905,8 +885,6 @@ def load_or(names, maker):
 SIMPLE = {
     "boia.png": make_buoy,
     "jato.png": make_spout,
-    "peixe.png": make_fish,
-    "peixe_nadando.png": make_fish_swim,
     "garrafa.png": make_bottle,
     "sacola.png": make_bag,
     "lata_vermelha.png": make_can,
