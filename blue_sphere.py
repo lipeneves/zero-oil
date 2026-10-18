@@ -1185,18 +1185,15 @@ HOWTO = [
 ]
 
 
-# creditos: (texto, None) = titulo de secao; (texto, "txt") = linha comum
+# creditos: (titulo da secao, [linhas]) — rolam na coluna da direita do menu
+CREDITS_TEAM = "CREATIUS GAMES"
 CREDITS = [
-    ("DESENVOLVIMENTO", None),
-    ("Seu nome aqui", "txt"),
-    ("ARTE E GAME DESIGN", None),
-    ("Seu nome aqui", "txt"),
-    ("FERRAMENTAS", None),
-    ("Python + pygame-ce  ·  código feito com ajuda do Claude Code", "txt"),
-    ("INSPIRAÇÃO", None),
-    ("Blue Sphere, de Sonic 3 & Knuckles (SEGA, 1994)", "txt"),
-    ("Feito para a Game Jam", "txt"),
+    ("DESENVOLVIMENTO E ARTE", ["Felipe Neves"]),
+    ("GAME DESIGN", ["Marilia Almeida"]),
+    ("FERRAMENTAS", ["Python + pygame-ce", "Claude Code"]),
 ]
+CREDITS_SPEED = 30     # velocidade da rolagem dos creditos (px/s)
+CREDITS_VIEW = (24, 382)  # faixa da tela (topo, base) onde os creditos rolam
 
 
 class App:
@@ -1226,8 +1223,11 @@ class App:
         self.menu_font = pygame.font.Font(font, size)
         self.menu_font_sel = pygame.font.Font(font, size_sel)
         self.record_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 17)  # mais limpa
+        self.credit_head_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 13)
         self.menu_t = 0.0
         self.sticker_cache = {}
+        self.credits_img = self.credits_fade = None  # montados no primeiro desenho
+        self.credits_scroll = 0.0
 
     def options(self):
         return self.MAIN if self.mode == "menu" else self.PAUSE
@@ -1240,6 +1240,7 @@ class App:
             self.mode = "howto"
         elif option == "CRÉDITOS":
             self.mode = "credits"
+            self.credits_scroll = 0.0
         elif option == "SAIR":
             pygame.quit()
             sys.exit()
@@ -1261,9 +1262,18 @@ class App:
             else:
                 self.game.handle_event(ev)
             return
-        if self.mode in ("howto", "credits"):
+        if self.mode == "credits":  # setas e roda do mouse rolam; o resto volta
+            if ev.type == pygame.MOUSEWHEEL:
+                self.credits_scroll -= ev.y * 40
+            elif ev.type == pygame.KEYDOWN and ev.key in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s):
+                self.credits_scroll += 40 if ev.key in (pygame.K_DOWN, pygame.K_s) else -40
+            elif ev.type == pygame.KEYDOWN or (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1):
+                self.mode = "menu"
+            return
+        if self.mode == "howto":
             if ev.type == pygame.KEYDOWN or ev.type == pygame.MOUSEBUTTONDOWN:
                 self.mode = "menu"
+                self.buttons = []
             return
         opts = self.options()
         if ev.type == pygame.KEYDOWN:
@@ -1287,9 +1297,11 @@ class App:
     def update(self, dt):
         if self.mode == "game":
             self.game.update(dt)
-        elif self.mode == "menu":
+        elif self.mode in ("menu", "credits"):
             self.menu_t += dt
-        elif self.mode in ("howto", "credits"):
+            if self.mode == "credits":
+                self.credits_scroll += CREDITS_SPEED * dt
+        elif self.mode == "howto":
             self.demo.update(dt)
 
     def text(self, msg, font, center, color=(255, 255, 255)):
@@ -1314,10 +1326,10 @@ class App:
             self.screen.blit(txt, txt.get_rect(center=rect.center))
             self.buttons.append(rect)
 
-    def draw_menu(self):
-        """Menu principal: a agua rola para tras do barco (que anda na direcao
-        MENU_BOAT_ANGLE), o barco balanca com a espuma animada, e a direita
-        ficam o titulo, os botoes e o recorde."""
+    def draw_menu_bg(self, title=True):
+        """Fundo do menu: a agua rola para tras do barco (que anda na direcao
+        MENU_BOAT_ANGLE), o barco balanca com a espuma animada, e o titulo
+        (se pedido) fica a direita."""
         scr, t = self.screen, self.menu_t
         tile = self.menu_water
         tw, th = tile.get_size()
@@ -1329,25 +1341,83 @@ class App:
                 scr.blit(tile, (x, y))
         frame = self.menu_boat[int(t * 8) % len(self.menu_boat)]
         scr.blit(frame, (0, round(math.sin(t * 2.2) * 3)))  # balanco na agua
-        scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X, 74)))
+        if title:
+            scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X, 74)))
+
+    def draw_menu_button(self, label, center, sel):
+        img = self.menu_img["botao_selecionado" if sel else "botao"]
+        rect = img.get_rect(center=center)
+        self.screen.blit(img, rect)
+        face = rect.inflate(0, -9).move(0, -4)  # a parte de cima (sem o relevo embaixo)
+        font = self.menu_font_sel if sel else self.menu_font
+        txt = font.render(label, True, (20, 19, 24) if sel else (245, 250, 252))
+        if txt.get_width() > face.w - 30:  # texto comprido: encolhe para caber
+            k = (face.w - 30) / txt.get_width()
+            txt = pygame.transform.smoothscale(txt, (int(txt.get_width() * k), int(txt.get_height() * k)))
+        self.screen.blit(txt, txt.get_rect(center=(face.centerx, face.centery + 1)))
+        return rect
+
+    def draw_menu(self):
+        """Menu principal: fundo animado, botoes e recorde na coluna da direita."""
+        scr = self.screen
+        self.draw_menu_bg()
         self.buttons = []
         for i, label in enumerate(self.MAIN):
-            sel = i == self.sel
-            img = self.menu_img["botao_selecionado" if sel else "botao"]
-            rect = img.get_rect(center=(MENU_X, 157 + i * 63))
-            scr.blit(img, rect)
-            face = rect.inflate(0, -9).move(0, -4)  # a parte de cima (sem o relevo embaixo)
-            font = self.menu_font_sel if sel else self.menu_font
-            txt = font.render(label, True, (20, 19, 24) if sel else (245, 250, 252))
-            if txt.get_width() > face.w - 30:  # texto comprido: encolhe para caber
-                k = (face.w - 30) / txt.get_width()
-                txt = pygame.transform.smoothscale(txt, (int(txt.get_width() * k), int(txt.get_height() * k)))
-            scr.blit(txt, txt.get_rect(center=(face.centerx, face.centery + 1)))
-            self.buttons.append(rect)
+            self.buttons.append(self.draw_menu_button(label, (MENU_X, 157 + i * 63), i == self.sel))
         rec = load_record()
         msg = "RECORDE  %d  ·  RIO %d" % (rec["pontos"], rec["rio"]) if rec["pontos"] else "SETAS E ENTER, OU O MOUSE"
         img = self.sticker(msg, self.record_font)
         scr.blit(img, img.get_rect(center=(MENU_X, 418)))
+
+    def draw_credits(self):
+        """Creditos no mesmo visual do menu: mesmo fundo, textos em adesivo
+        subindo em loop na coluna da direita (sumindo nas bordas) e um botao
+        VOLTAR no lugar do recorde."""
+        scr = self.screen
+        self.draw_menu_bg(title=False)
+        if self.credits_img is None:
+            self.credits_img, self.credits_fade = self.build_credits()
+        img = self.credits_img
+        top, bottom = CREDITS_VIEW
+        view_h = bottom - top
+        # o texto entra por baixo, sai por cima e recomeca
+        y = view_h - self.credits_scroll % (img.get_height() + view_h)
+        view = pygame.Surface((img.get_width(), view_h), pygame.SRCALPHA)
+        view.blit(img, (0, round(y)))
+        view.blit(self.credits_fade, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        scr.blit(view, view.get_rect(midtop=(MENU_X, top)))
+        self.buttons = []  # qualquer tecla ou clique volta (ver handle_event)
+        self.draw_menu_button("VOLTAR", (MENU_X, 418), True)
+
+    def build_credits(self):
+        """Monta os creditos numa imagem alta (para rolar) e a mascara que
+        apaga o texto suavemente no topo e na base da faixa."""
+        max_w = 2 * (W - MENU_X) - 24  # largura da coluna, sem encostar na borda
+        rows = [(self.sticker(CREDITS_TEAM, self.menu_font_sel), 0)]
+        for head, lines in CREDITS:
+            # titulo da secao com as cores invertidas, para separar dos nomes
+            rows.append((self.sticker(head, self.credit_head_font, ink=(245, 250, 252), line=(20, 19, 24), depth=1), 30))
+            for line in lines:
+                rows.append((self.sticker(line, self.record_font), 2))
+        fitted = []
+        for img, gap in rows:
+            if img.get_width() > max_w:  # linha comprida: encolhe para caber
+                k = max_w / img.get_width()
+                img = pygame.transform.smoothscale(img, (int(img.get_width() * k), int(img.get_height() * k)))
+            fitted.append((img, gap))
+        out = pygame.Surface((max_w, sum(i.get_height() + g for i, g in fitted)), pygame.SRCALPHA)
+        y = 0
+        for img, gap in fitted:
+            y += gap
+            out.blit(img, img.get_rect(midtop=(max_w // 2, y)))
+            y += img.get_height()
+        view_h = CREDITS_VIEW[1] - CREDITS_VIEW[0]
+        fade = pygame.Surface((max_w, view_h), pygame.SRCALPHA)
+        edge = 28
+        for row in range(view_h):
+            a = min(255, 255 * min(row, view_h - 1 - row) // edge)
+            fade.fill((255, 255, 255, a), (0, row, max_w, 1))
+        return out, fade
 
     def sticker(self, msg, font, ink=(20, 19, 24), line=(245, 250, 252), depth=2):
         """Texto no estilo do titulo: letra de uma cor com contorno (e relevo
@@ -1371,6 +1441,9 @@ class App:
         if self.mode == "menu":
             self.draw_menu()
             return
+        if self.mode == "credits":
+            self.draw_credits()
+            return
         if self.mode in ("game", "pause"):
             self.game.draw()
             if self.mode == "pause":
@@ -1383,15 +1456,12 @@ class App:
                 self.draw_buttons(H // 2 + 5)
             return
         self.demo.draw()
-        # como jogar / creditos
+        # como jogar
         shade_ = pygame.Surface((W - 60, H - 60), pygame.SRCALPHA)
         shade_.fill((8, 35, 60, 225))
         scr.blit(shade_, (30, 30))
         y = 60
-        if self.mode == "credits":
-            self.text("ZERO OIL", self.title, (W // 2, y), (150, 255, 200))
-            y += 44
-        for line, kind in (HOWTO if self.mode == "howto" else CREDITS):
+        for line, kind in HOWTO:
             if kind is None:
                 y += 8
                 self.text(line, self.font, (W // 2, y), (255, 215, 80))
