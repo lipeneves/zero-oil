@@ -1497,7 +1497,7 @@ CONTROLS = [
 CREDITS_TEAM = "CREATIUS GAMES"
 CREDITS = [
     ("DESENVOLVIMENTO", ["Felipe Neves"]),
-    ("ARTE E INTERFACE", ["Marilia Almeida"]),
+    ("ARTE E INTERFACE", ["Marília Almeida"]),
     ("GAME DESIGN", ["Felipe Neves"]),
     ("TEXTURA DA ÁGUA", ["brgfx - Magnific/Freepik", "(Freepik License)"]),
     ("BOIA DE SINALIZAÇÃO", ["Nhor Phai - Flaticon", "(Flaticon License)"]),
