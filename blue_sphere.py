@@ -1501,6 +1501,7 @@ CREDITS = [
     ("GAME DESIGN", ["Felipe Neves"]),
     ("TEXTURA DA ÁGUA", ["brgfx - Magnific/Freepik", "(Freepik License)"]),
     ("BOIA DE SINALIZAÇÃO", ["Nhor Phai - Flaticon", "(Flaticon License)"]),
+    ("CORAÇÃO", ["juicy_fish - Magnific/Freepik", "(Freepik License)"]),
     ("MÚSICA", ["\"Flowerbed Fields\"", "Zane Little Music (CC0)"]),
     ("EFEITOS SONOROS", ["Kenney - kenney.nl (CC0)", "rubberduck - OpenGameArt (CC0)",
                          "Breviceps - Freesound (CC0)", "Universfield - Pixabay (Pixabay License)"]),

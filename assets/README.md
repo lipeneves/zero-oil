@@ -43,6 +43,8 @@ O visual da água é baseado no vetor ["Blue water surface template in cartoon s
 |---|---|---|
 | `base/coracao.svg` | Coração vermelho do placar (um por vida), estilo cartoon: contorno escuro, sombra embaixo e brilho em cima; o jogo lê o SVG direto em 28×26 | 100×92 |
 
+O coração é baseado no vetor ["Estilo de desenho animado de coração"](https://www.magnific.com/br/vetores-gratis/estilo-de-desenho-animado-de-coracao_362088535.htm), de **juicy_fish**, no Magnific (antigo Freepik). A licença gratuita do Freepik **exige crédito** ("Imagem de juicy_fish no Freepik"). O crédito está na tela de créditos do jogo; não remova.
+
 ## Estação de reciclagem
 
 | Arquivo | O que é | Tamanho |
