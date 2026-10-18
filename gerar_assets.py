@@ -569,89 +569,75 @@ BOAT_SVG_FIT = (0.92, 184.4, 89.9)  # escala e deslocamento (x, y) do barco-cart
 
 
 def _wake_svg(phase, width, height):
-    """Esteira em SVG (fica por baixo do barco): o V de ondas que se abre
-    atras da popa e a espuma da helice no meio. Tudo branco semitransparente,
-    sumindo com a distancia, para a cor da agua aparecer. 'phase' (0..1) anda
-    um espaco entre ondas: os 4 quadros fecham o loop sem pulo."""
-    cx, y0 = width / 2, BOAT_SVG_STERN
-    out = ['<defs>']
-    for side, name in ((-1, "l"), (1, "r")):
-        out.append('<linearGradient id="arm%s" gradientUnits="userSpaceOnUse" x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f">'
-                   '<stop offset="0" stop-color="#fff" stop-opacity="0.38"/>'
-                   '<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'
-                   % (name, cx + side * 95, y0, cx + side * 285, height))
-    out.append('<linearGradient id="wash" gradientUnits="userSpaceOnUse" x1="0" y1="%.1f" x2="0" y2="%.1f">'
-               '<stop offset="0" stop-color="#fff" stop-opacity="0.5"/>'
-               '<stop offset="0.35" stop-color="#fff" stop-opacity="0.22"/>'
-               '<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>' % (y0, height - 40))
+    """Agua mexendo em volta do barco andando (fica por baixo do barco), no
+    estilo cartoon: arquinhos de agua entrando na boca do coletor, riscos de
+    velocidade rentes ao casco, espuma branca em nuvem no motor (com uma
+    sombra ciano por baixo) e rastros ciano finos e ondulados que se abrem
+    para tras. 'phase' (0..1) anda um passo da
+    animacao: os 4 quadros fecham o loop sem pulo."""
+    cx = width / 2
+    out = []
 
-    def fade(u, top=0.06):  # aparece debaixo da popa e some longe do barco
-        return max(0.0, min(1.0, u / top)) * (1 - u) ** 1.3
+    def cloud(blobs, grow=0.0):
+        """Espuma: circulos brancos sobre circulos ciano um pouco maiores e
+        mais baixos (a sombra), como nos jogos cartoon."""
+        shade = ['<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>' % (x, y + 4, r + 4 + grow, FOAM_SHADE)
+                 for x, y, r in blobs]
+        white = ['<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>' % (x, y, r, FOAM_WHITE) for x, y, r in blobs]
+        out.extend(shade + white)
 
-    def band(center, half, waves, fill, layers):
-        """Faixa macia: varias copias cada vez mais finas e semitransparentes
-        (borda esfumada), com a borda ondulando e andando junto com 'phase'."""
-        for scale, op in layers:
-            left, right = [], []
-            for i in range(25):
-                t = i / 24
-                (x, y), (nx, ny), h = center(t), (1.0, 0.0), half(t) * scale
-                w = math.sin(2 * math.pi * (t * waves - phase)) * (3 + 9 * t)
-                w2 = math.sin(2 * math.pi * (t * waves - phase) + 2.1) * (3 + 9 * t)
-                left.append((x - nx * (h + w), y))
-                right.append((x + nx * (h + w2), y))
-            pts = left + right[::-1]
-            out.append('<path d="M%s Z" fill="%s" fill-opacity="%.2f"/>'
-                       % (" L".join("%.1f %.1f" % p for p in pts), fill, op))
-
-    # ondas transversais: arcos fracos atravessando a esteira
-    for k in range(5):
-        u = (k + phase) / 5
-        y = y0 + u * (height - y0)
-        half = 95 + 190 * u
-        out.append('<path d="M%.1f %.1f Q%.1f %.1f %.1f %.1f" fill="none" stroke="#fff" stroke-opacity="%.3f" '
+    # agua entrando no coletor: arquinhos que chegam na boca do U e encolhem la dentro
+    (mx0, my0), (mx1, my1) = WAKE_MOUTH
+    mcx = (mx0 + mx1) / 2
+    for k in range(3):
+        t = (k + phase) / 3
+        y = my0 - 14 + (my1 - my0 + 8) * t
+        hw = (mx1 - mx0) / 2 * (0.7 - 0.35 * t)
+        out.append('<path d="M%.1f %.1f Q%.1f %.1f %.1f %.1f" fill="none" stroke="%s" stroke-opacity="%.2f" '
                    'stroke-width="%.1f" stroke-linecap="round"/>'
-                   % (cx - half * 0.9, y - 8 * u, cx, y + 22 + 30 * u, cx + half * 0.9, y - 8 * u,
-                      0.2 * fade(u, 0.15), 2 + 4 * u))
-    # faixa suave ao longo de cada braco do V
-    for side, name in ((-1, "l"), (1, "r")):
-        sx, ex = cx + side * 95, cx + side * 285
-        band(lambda t, sx=sx, ex=ex, side=side: (sx + (ex - sx) * t - side * (4 + 14 * t), y0 + (height - y0) * t),
-             lambda t: 3 + 16 * t, 4, "url(#arm%s)" % name, ((1.0, 0.35), (0.6, 0.45), (0.3, 0.6)))
-    # cristas do V: tracos curtos e curvos ao longo de cada braco
-    n = 10
+                   % (mcx - hw, y + 3, mcx, y - 3, mcx + hw, y + 3, FOAM_WHITE, 0.4 * math.sin(math.pi * t), 2.5 - t))
+    # riscos de velocidade rentes ao casco, deslizando para tras
+    (sy0, sy1), sx = WAKE_SIDES
     for side in (-1, 1):
-        sx, ex = cx + side * 95, cx + side * 285
-        dx, dy = ex - sx, height - y0
-        ln = math.hypot(dx, dy)
-        dx, dy = dx / ln, dy / ln
-        nx, ny = (-dy, dx) if (-dy) * side < 0 else (dy, -dx)  # normal para o meio da esteira
-        for k in range(n):
-            u = (k + phase) / n
-            wob = math.sin(u * 23.0) * 0.25 + 1  # variacao suave (so depende da posicao)
-            px, py = sx + (ex - sx) * u, y0 + dy * ln * u
-            L = (16 + 58 * u) * wob
-            qx, qy = px + (nx * 0.8 - dx * 0.55) * L, py + (ny * 0.8 - dy * 0.55) * L
-            mx, my = (px + qx) / 2 + dx * L * 0.25, (py + qy) / 2 + dy * L * 0.25
-            for w, op in ((4 + 8 * u, 0.25), (1.5 + 3 * u, 0.8)):  # brilho largo + traco fino
-                out.append('<path d="M%.1f %.1f Q%.1f %.1f %.1f %.1f" fill="none" stroke="#fff" '
-                           'stroke-opacity="%.3f" stroke-width="%.1f" stroke-linecap="round"/>'
-                           % (px, py, mx, my, qx, qy, op * fade(u), w))
-    # espuma da helice: faixa clara + bolhas rolando para tras
-    band(lambda t: (cx, y0 + (height - y0) * t), lambda t: 72 + 50 * t, 3, "url(#wash)",
-         ((1.0, 0.3), (0.8, 0.3), (0.6, 0.35), (0.4, 0.4)))
-    m = 14
-    for k in range(m):
-        u = (k + phase) / m
-        y = y0 + u * (height - y0 - 40)
-        spread = 70 + 50 * u
-        for lane in range(5):
-            off = math.sin(u * (9 + 4 * lane) + lane * 1.7) * 0.5 + (lane - 2) * 0.32
-            x = cx + off * spread
-            rx, ry = (5 + 13 * u) * (0.7 + 0.3 * math.cos(u * 17 + lane)), 3 + 7 * u
-            out.append('<ellipse cx="%.1f" cy="%.1f" rx="%.1f" ry="%.1f" fill="#fff" fill-opacity="%.3f"/>'
-                       % (x, y, rx, ry, 0.5 * fade(u, 0.04)))
+        for k in range(3):
+            t = (k + phase + 0.5 * (side > 0)) / 3 % 1
+            y = sy0 + (sy1 - sy0) * t
+            x = cx + side * (sx + 6 * t)
+            out.append('<path d="M%.1f %.1f L%.1f %.1f" fill="none" stroke="%s" stroke-opacity="%.2f" '
+                       'stroke-width="3.5" stroke-linecap="round"/>'
+                       % (x, y, x + side * 2, y + 30, FOAM_WHITE, 0.9 * math.sin(math.pi * t)))
+
+    # rastros: poucas faixas ciano longas e onduladas saindo da popa, abrindo um pouco e sumindo
+    y0 = BOAT_SVG_STERN
+    length = height - y0 - 20
+    for off, spread, w in ((-46, 2.2, 9), (-14, 1.6, 7), (16, 1.6, 7), (48, 2.2, 9)):
+        m = 14
+        pts = []
+        for k in range(m + 1):
+            t = k / m
+            wig = 7 * t * math.sin(math.tau * (t * 2.5 - phase) + off)
+            pts.append((cx + off * (1 + (spread - 1) * t) + wig, y0 + 20 + length * t))
+        for k in range(m):                                     # pedacos seguidos, cada vez mais apagados
+            t = k / m
+            op = 0.8 * min(1.0, (t + 0.04) / 0.12) * (1 - t) ** 1.1
+            out.append('<path d="M%.1f %.1f L%.1f %.1f" fill="none" stroke="%s" stroke-opacity="%.2f" '
+                       'stroke-width="%.1f" stroke-linecap="round"/>'
+                       % (pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], WAKE_TRAIL, op, w * (1 - 0.45 * t)))
+    # espuma no motor (a helice batendo a agua)
+    blobs = []
+    for i in range(7):
+        u = i / 6
+        pulse = math.sin(math.tau * (phase + u))
+        blobs.append((cx - 42 + 84 * u, y0 + 26 + 6 * abs(u - 0.5) * -2 + 3 * pulse, 11 + 3 * pulse))
+    cloud(blobs, grow=-1)
     return "\n        ".join(out)
+
+
+FOAM_WHITE = "#ffffff"
+FOAM_SHADE = "#8fe7ee"   # sombra ciano da espuma
+WAKE_TRAIL = "#bff6f7"   # rastros atras do barco
+WAKE_MOUTH = ((240.0, 44.0), (347.0, 64.0))  # boca do coletor (cantos, unidades do quadro SVG)
+WAKE_SIDES = ((190.0, 400.0), 113.0)          # riscos dos lados: de onde ate onde (y) e distancia do meio
 
 
 BOAT_OUTLINE = "#20242b"  # contorno (grafite, no lugar do preto puro)
