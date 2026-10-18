@@ -70,7 +70,11 @@ TURN_ANGLE = math.tau / ND
 SPEED_START = 4.0
 SPEED_MAX = 9.0
 SPEED_GAIN = 1 / 18  # casas/s ganhas por segundo de jogo
-TURN_TIME = 0.16
+TURN_TIME = 0.24     # segundos que o barco leva para virar
+TURN_SLOW = 0.55     # fracao da velocidade no centro da curva (freia antes, acelera depois)
+TURN_BRAKE = 0.5     # casas antes do centro em que o barco comeca a frear para virar
+TURN_RECOVER = 0.35  # segundos para voltar a velocidade toda depois de virar
+CAM_FOLLOW = 12.0    # quao rapido a camera alcanca o barco nas curvas (maior = mais colada)
 ITEM_R = 0.4
 STATION_SCALE = 1.65  # tamanho do modelo da estacao
 DOCK_CLEAR = 2        # casas livres em volta da estacao (mais 3 na frente da vaga)
@@ -344,6 +348,7 @@ class Game:
         self.heading = 0.0   # angulo do barco (a camera vai atras dele)
         self.turn_from = self.turn_to = 0.0
         self.turn_t = -1.0
+        self.since_turn = 10.0  # tempo desde a ultima curva (para acelerar de novo)
         self.moving = False
         self.start_timer = 1.6
         self.queued = 0
@@ -466,6 +471,7 @@ class Game:
         self.heading += delta * TURN_ANGLE
         self.view = self.heading
         self.turn_t = -1.0
+        self.since_turn = 10.0  # tempo desde a ultima curva (para acelerar de novo)
         self.moving = False
         self.start_timer = 1.6
         self.queued = 0
@@ -655,18 +661,21 @@ class Game:
             return
         if self.state != "play":
             return
+        self.follow_camera(dt)
         if self.turn_t >= 0:
             self.turn_t += dt / TURN_TIME
             if self.turn_t >= 1:
-                self.heading = self.view = self.turn_to
+                self.heading = self.turn_to
                 self.turn_t = -1.0
+                self.since_turn = 0.0
                 if not self.check_station():  # virou de frente para a estacao
                     self.update_guide()
             else:
                 s = self.turn_t
-                self.heading = self.turn_from + (self.turn_to - self.turn_from) * s * s * (3 - 2 * s)
-                self.view = self.heading  # a camera gira junto com o barco
+                ease = s * s * s * (s * (6 * s - 15) + 10)  # comeca e termina devagar
+                self.heading = self.turn_from + (self.turn_to - self.turn_from) * ease
             return
+        self.since_turn += dt
         if not self.moving:
             if self.queued and self.at_center():
                 self.start_turn(self.queued)
@@ -678,7 +687,30 @@ class Game:
             self.moving = True
         self.play_time += dt
         self.river_time += dt
-        self.advance(self.speed * dt)
+        self.advance(self.speed * self.turn_pace() * dt)
+
+    def follow_camera(self, dt):
+        """A camera vai atras do barco com um pouco de atraso: nas curvas o
+        barco vira primeiro e a camera gira em seguida, sem tranco."""
+        diff = self.heading - self.view
+        if abs(diff) < 0.002:
+            self.view = self.heading
+        else:
+            self.view += diff * (1 - math.exp(-CAM_FOLLOW * dt))
+
+    def turn_pace(self):
+        """Fracao da velocidade perto das curvas: com uma curva pedida o barco
+        freia chegando no centro da casa, e depois de virar acelera de novo."""
+        def smooth(t):
+            t = max(0.0, min(1.0, t))
+            return t * t * (3 - 2 * t)
+        after = smooth(self.since_turn / TURN_RECOVER)
+        before = 1.0
+        if not self.air:
+            keys = pygame.key.get_pressed()
+            if self.queued or keys[pygame.K_RIGHT] != keys[pygame.K_LEFT]:
+                before = smooth(self.rem_to_center() / TURN_BRAKE)
+        return TURN_SLOW + (1 - TURN_SLOW) * min(after, before)
 
     # ---- desenho ----
     def item_sprite(self, kind, variant, w, h=None):
@@ -934,7 +966,7 @@ class Game:
                 buf.blit(tile, (x, y))
         self.paint_ground(buf)
         ang = math.degrees(self.view)
-        if self.turn_t < 0 and not self.demo:  # fora das curvas: angulo exato (giro rapido de 90 graus)
+        if self.view == self.heading and self.turn_t < 0 and not self.demo:  # camera parada: angulo exato
             step = math.degrees(TURN_ANGLE)
             ang = round(ang / step) * step
         rot = pygame.transform.rotate(buf, ang) if ang % 360 else buf
@@ -978,6 +1010,13 @@ class Game:
             row = 0
         frame = self.boat_layers(frames[row])
         ax, ay = self.boat_meta["apoio"]
+        tilt = math.degrees(self.heading - self.view)  # nas curvas o barco vira antes da camera
+        if abs(tilt) > 0.3:
+            # gira em volta do apoio: o ponto que encosta na agua fica no mesmo lugar
+            pivot = pygame.Vector2(ax, ay)
+            off = pivot - pygame.Vector2(frame.get_rect().center)
+            frame = pygame.transform.rotozoom(frame, -tilt, 1.0)  # rotozoom: borda suave
+            ax, ay = pygame.Vector2(frame.get_rect().center) + off.rotate(tilt)
         gx, gy = self.ground[0], self.ground[1]
         if self.air:
             fs = self.flat_size(0, 0, 0.9, 1.4)
