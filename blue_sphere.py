@@ -95,6 +95,7 @@ CAM_FOLLOW = 12.0   # quao rapido a camera alcanca o barco nas curvas (maior = m
 ITEM_R = 0.4
 POPUP_LIFT = 0.15     # altura do marcador de reciclagem acima da agua (casas), no meio da vaga
 DOCK_CLEAR = 2        # casas livres em volta da estacao (mais 3 na frente da vaga)
+HUD_Y = 36            # linha do alto da tela (meio): coracoes, "RIO x" e pontos / recorde
 LIVES_START = 3       # barcos no inicio da corrida
 BELT_TIME = 0.45      # segundos que o oleo recolhido leva para descer a esteira ate a cacamba
 MAP_CELL = 6         # minimapa: pixels por casa no desenho (reduzido para 3 na tela)
@@ -360,9 +361,12 @@ class Game:
     def __init__(self, screen, demo=False):
         self.screen = screen
         self.demo = demo  # fundo do menu: camera girando devagar, sem placar
-        self.font = pygame.font.SysFont("arialblack,arial", 34, bold=True)
-        self.small = pygame.font.SysFont("arial", 20, bold=True)
-        self.big = pygame.font.SysFont("arialblack,arial", 56, bold=True)
+        # textos do jogo: mesma fonte e contorno do marcador de reciclagem (estilo cartoon)
+        rubik = os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf")
+        self.font = pygame.font.Font(rubik, 34)
+        self.small = pygame.font.Font(rubik, 20)
+        self.big = pygame.font.Font(rubik, 56)
+        self.text_cache = {}
         import gerar_assets  # cria a arte padrao que ainda nao existir em assets/
         if gerar_assets.missing():
             gerar_assets.generate(log=lambda msg: None)
@@ -372,8 +376,7 @@ class Game:
             FISH: [load_image("base/peixe.svg", (96, 96)), load_image("base/peixe_nadando.svg", (96, 72))],
         }
         self.img = {n: load_image(n + ".png") for n in (
-            "sombra", "painel", "bussola", "bussola_seta",
-            "menu_painel")}
+            "sombra", "menu_painel")}
         # marcador da estacao: bolha verde com o simbolo de reciclagem e o contador "0/x"
         self.img["popup_contador"] = load_image("base/popup_contador.svg", (240, 120))
         # anel de onda em volta do que boia: um tom por nivel de poluicao (da cor da agua)
@@ -471,7 +474,6 @@ class Game:
         self.ground_turns.clear()
         self.guide = []          # casas do caminho ate a descarga
         self.guide_turn = None   # -1 esquerda, 0 em frente, 1 direita (na proxima casa)
-        self.guide_target = None
         self.px = self.py = float(N // 2)
         self.dir = 0
         self.view = 0.0      # angulo da camera
@@ -496,9 +498,9 @@ class Game:
         self.state_timer = 0.0
         self.clear_bonus = 0
         self.extra_life = False
-        self.message = "RIO %d" % self.river if self.river > 1 else "RIO 1  ·  LIMPE O ÓLEO!"
+        self.message = ""  # o numero do rio ja aparece no topo da tela
         self.fail_msg = ""
-        self.msg_timer = 1.6
+        self.msg_timer = 0.0
 
     @property
     def speed(self):
@@ -619,26 +621,14 @@ class Game:
         self.flash("%d BARCO%s" % (self.lives, "S" if self.lives > 1 else ""), 1.2)
         self.update_guide()
 
-    def nearest_dock(self, x, y):
-        best, best_d = None, 1e9
-        for cy in range(N):
-            for cx in range(N):
-                if self.grid[cy][cx] == DOCK:
-                    dx = (cx - x + N // 2) % N - N // 2
-                    dy = (cy - y + N // 2) % N - N // 2
-                    if abs(dx) + abs(dy) < best_d:
-                        best, best_d = (cx, cy), abs(dx) + abs(dy)
-        return best
-
     def update_guide(self):
         """Caminho mais curto ate uma descarga, respeitando como o barco anda:
         sem dar re e so virando nos centros das casas; desvia de boias, pneus
         e jatos. Comeca na proxima casa (a decisao desta casa ja foi tomada)."""
-        self.guide, self.guide_turn, self.guide_target = [], None, None
+        self.guide, self.guide_turn = [], None
         if self.state != "play" or not self.need_unload:
             return
         x, y = round(self.px) % N, round(self.py) % N
-        self.guide_target = self.nearest_dock(x, y)
         mi = self.dir
         sx, sy = (x + DIRS[mi][0]) % N, (y + DIRS[mi][1]) % N
         blocked = (BUOY, SPOUT, FISH)  # a estacao nao bloqueia: o barco passa por ela
@@ -667,7 +657,6 @@ class Game:
             goal = prev[goal]
         path.reverse()
         self.guide = [(x, y)] + [(cx, cy) for cx, cy, _ in path]
-        self.guide_target = self.guide[-1]
         if len(path) > 1:
             nd = path[1][2]
             self.guide_turn = 0 if nd == mi else 1 if nd == (mi + 1) % ND else -1
@@ -1233,39 +1222,53 @@ class Game:
             bob = math.sin(self.anim * 3.1) * 2.5
             scr.blit(frame, (gx - ax, gy - ay + bob))
 
-    def text(self, msg, font, center, color=(255, 255, 255)):
-        img = font.render(msg, True, color)
-        shadow = font.render(msg, True, (0, 0, 60))
-        rect = img.get_rect(center=center)
-        for ox, oy in ((-2, 0), (2, 0), (0, -2), (0, 2), (2, 2)):
-            self.screen.blit(shadow, rect.move(ox, oy))
-        self.screen.blit(img, rect)
+    def text_image(self, msg, font, color=(255, 255, 255)):
+        """Texto com o contorno escuro do estilo cartoon (o mesmo do marcador de
+        reciclagem): a letra colorida por cima da mesma letra em #20242b, deslocada
+        em 8 direcoes. Guardado pronto, porque quase sempre se repete."""
+        key = (msg, font, color)
+        img = self.text_cache.get(key)
+        if img is None:
+            if len(self.text_cache) > 256:  # pontos mudam sem parar: nao deixa crescer
+                self.text_cache.clear()
+            txt = font.render(msg, True, color)
+            ink = font.render(msg, True, (32, 36, 43))
+            r = max(2, font.get_height() // 16)  # contorno proporcional ao tamanho da letra
+            img = pygame.Surface((txt.get_width() + 2 * r, txt.get_height() + 2 * r), pygame.SRCALPHA)
+            for dx, dy in ((-r, 0), (r, 0), (0, -r), (0, r), (-r + 1, -r + 1), (r - 1, -r + 1),
+                           (-r + 1, r - 1), (r - 1, r - 1)):
+                img.blit(ink, (r + dx, r + dy))
+            img.blit(txt, (r, r))
+            self.text_cache[key] = img
+        return img
+
+    def text(self, msg, font, pos, color=(255, 255, 255), anchor="center"):
+        """Escreve com o contorno cartoon; anchor = ponto do texto que fica em pos
+        (center, midright...)."""
+        img = self.text_image(msg, font, color)
+        self.screen.blit(img, img.get_rect(**{anchor: pos}))
 
     def draw_hud(self):
         scr = self.screen
         if self.state == "gameover":
             self.draw_gameover()
             return
-        scr.blit(self.img["painel"], (40, 18))
-        self.text(f"{max(0, self.litter_left):03d}", self.font, (100, 41))
-        scr.blit(self.scaled(("mancha", 0), self.slicks[0], 38, 30), (157, 26))
         icon = self.img["coracao"]
-        for i in range(self.lives):  # coracoes = vidas restantes
-            scr.blit(icon, (46 + i * (icon.get_width() + 6), 68))
-        # pontos e recorde
-        scr.blit(self.img["painel"], (W - 200, 18))
-        self.text(f"{self.score}", self.font, (W - 120, 41), (255, 230, 120))
+        for i in range(self.lives):  # coracoes = vidas restantes (no alto, a esquerda)
+            scr.blit(icon, (46 + i * (icon.get_width() + 6), HUD_Y - icon.get_height() // 2))
+        # pontos / recorde numa linha so, alinhada a direita (espelha os coracoes)
         best = max(self.best["pontos"], self.score)
-        self.text(f"RECORDE {best}", self.small, (W - 120, 78), (220, 235, 245))
-        self.text(f"RIO {self.river}", self.small, (W // 2, 30))
-        if self.state == "play" and self.need_unload:
-            self.draw_compass()
+        rest = self.text_image(f"/  {best}", self.small, (220, 235, 245))
+        rect = rest.get_rect(midright=(W - 40, HUD_Y))
+        scr.blit(rest, rect)
+        self.text(f"{self.score}", self.small, (rect.left - 4, rect.centery), (255, 230, 120), "midright")
+        self.text(f"RIO {self.river}", self.small, (W // 2, HUD_Y))
         if self.state != "gameover":
             self.draw_minimap()
         if self.state == "play" and self.combo >= 2:
             self.text("COMBO x%d" % min(self.combo, 5), self.small, (W // 2, 116), (255, 200, 80))
         for label, age, color in self.popups:  # "+10" subindo acima do barco
-            img = self.small.render(label, True, color)
+            img = self.text_image(label, self.small, color).copy()  # copia: o alpha nao vai para o cache
             img.set_alpha(int(255 * min(1.0, 2.2 - 2 * age)))
             scr.blit(img, img.get_rect(center=(self.ground[0], self.ground[1] - 140 - age * 45)))
 
@@ -1349,23 +1352,6 @@ class Game:
             self.text("recorde %d" % self.best["pontos"], self.small, (cx, top + 192), (160, 180, 195))
         self.text("ENTER  mais uma vez", self.small, (cx, top + 238), (255, 215, 80))
         self.text("Esc  menu", self.small, (cx, top + 266), (160, 180, 195))
-
-    def draw_compass(self):
-        """Bussola pequena apontando para a descarga."""
-        scr = self.screen
-        target = self.guide[min(2, len(self.guide) - 1)] if self.guide else self.guide_target
-        if target is None:
-            return
-        dx = (target[0] - self.px + N / 2) % N - N / 2
-        dy = (target[1] - self.py + N / 2) % N - N / 2
-        fx, fy = math.sin(self.view), -math.cos(self.view)
-        rx, ry = math.cos(self.view), math.sin(self.view)
-        a = math.atan2(dx * rx + dy * ry, dx * fx + dy * fy)
-        center = (W // 2, 74)
-        bg = self.img["bussola"]
-        scr.blit(bg, bg.get_rect(center=center))
-        arrow = pygame.transform.rotate(self.img["bussola_seta"], -math.degrees(a))
-        scr.blit(arrow, arrow.get_rect(center=center))
 
 
 # --- menu ---------------------------------------------------------------------

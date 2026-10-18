@@ -120,28 +120,6 @@ def make_shadow():
     return s
 
 
-def make_panel():
-    s = pygame.Surface((160, 46), pygame.SRCALPHA)
-    pygame.draw.rect(s, (10, 40, 60), s.get_rect(), border_radius=8)
-    pygame.draw.rect(s, (255, 255, 255), s.get_rect(), 3, border_radius=8)
-    return s
-
-
-def make_compass():
-    s = pygame.Surface((44, 44), pygame.SRCALPHA)
-    pygame.draw.circle(s, (10, 40, 60), (22, 22), 21)
-    pygame.draw.circle(s, (255, 225, 80), (22, 22), 21, 2)
-    return s
-
-
-def make_compass_arrow():
-    s = pygame.Surface((32, 32), pygame.SRCALPHA)
-    pts = [(16, 1), (27, 16), (20, 16), (20, 28), (12, 28), (12, 16), (5, 16)]
-    pygame.draw.polygon(s, (255, 225, 80), pts)
-    pygame.draw.polygon(s, (120, 80, 0), pts, 2)
-    return s
-
-
 def make_sign():
     """Plaquinha do contador de oleo entregue (o numero e escrito pelo jogo)."""
     s = pygame.Surface((120, 40), pygame.SRCALPHA)
@@ -778,9 +756,6 @@ SIMPLE = {
     "mancha_3.png": lambda: make_slick(3),
     "mancha_4.png": lambda: make_slick(4),
     "sombra.png": make_shadow,
-    "painel.png": make_panel,
-    "bussola.png": make_compass,
-    "bussola_seta.png": make_compass_arrow,
     "placa_contador.png": make_sign,
     "logo.png": make_logo,
     "menu_painel.png": make_menu_panel,

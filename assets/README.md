@@ -81,8 +81,6 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 
 | Arquivo | O que é |
 |---|---|
-| `painel.png` | Caixas do placar (160×46) |
-| `bussola.png`, `bussola_seta.png` | Fundo da bússola e a seta (desenhe a seta apontando para cima) |
 | `placa_contador.png` | Plaquinha do óleo entregue (não usada no jogo por enquanto) |
 | `base/minimapa.svg` | Moldura redonda do minimapa, estilo cartoon (108×108); o jogo desenha o mapa no círculo do meio (raio 44) |
 | `base/minimapa_barco.svg` | Setinha amarela do barco no centro do minimapa (desenhada em 16×16) |
