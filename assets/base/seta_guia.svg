@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <title>seta_guia.svg</title>
+  <!-- seta do guia ate a descarga, vista de cima e apontando para cima (para a frente):
+       chevron (V) branco com as pontas arredondadas, estilo cartoon discreto. O
+       contorno fino e a sombra leve sao escuros e meio transparentes, para a seta
+       nao sumir em cima das ondas claras -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- sombra leve (deslocada para baixo) -->
+    <path d="M20 66 L48 36 L76 66" transform="translate(0 5)" stroke="#0d2f45" stroke-opacity="0.2" stroke-width="20"/>
+    <!-- contorno -->
+    <path d="M20 66 L48 36 L76 66" stroke="#0d2f45" stroke-opacity="0.45" stroke-width="20"/>
+    <!-- corpo -->
+    <path d="M20 66 L48 36 L76 66" stroke="#ffffff" stroke-width="15"/>
+  </g>
+</svg>

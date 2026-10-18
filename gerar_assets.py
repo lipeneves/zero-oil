@@ -14,7 +14,7 @@ Uso:
   python gerar_assets.py           gera so os arquivos que faltam
   python gerar_assets.py --todos   recria tudo (sobrescreve a sua arte!)
   python gerar_assets.py --barco-svg  recria os quadros do barco a partir do barco-cartoon.svg
-  python gerar_assets.py --agua    recria so as texturas da agua
+  python gerar_assets.py --agua    recria so a textura da agua (fundo do menu)
   python gerar_assets.py --menu    recria so a arte do menu (barco, titulo e botoes)
 """
 import json
@@ -197,15 +197,6 @@ def make_shadow():
     return s
 
 
-def make_arrow():
-    """Seta do guia vista de cima, apontando para cima (para a frente)."""
-    s = pygame.Surface((96, 96), pygame.SRCALPHA)
-    pts = [(48, 6), (90, 70), (48, 48), (6, 70)]
-    pygame.draw.polygon(s, (255, 215, 60), pts)
-    pygame.draw.polygon(s, (120, 80, 0), pts, 5)
-    return s
-
-
 def make_panel():
     s = pygame.Surface((160, 46), pygame.SRCALPHA)
     pygame.draw.rect(s, (10, 40, 60), s.get_rect(), border_radius=8)
@@ -286,40 +277,25 @@ def make_button(selected):
     return s
 
 
-WATER_COLORS = {  # (fundo, faixas claras)
-    "clean": ((74, 178, 228), (124, 205, 240)),
-    "dirty": ((84, 96, 58), (108, 122, 78)),
-}
+WATER_TEX_PPC = 56  # pixels por casa da textura da agua do menu
 
 
 def make_water(ppc, period):
-    """Texturas de agua sem emendas (limpa e poluida), estilo desenho:
-    fundo liso e faixas claras onduladas de grossura variada. As duas usam
-    o mesmo desenho, para o jogo misturar uma na outra conforme a poluicao."""
+    """Textura de agua sem emendas (limpa), estilo desenho, para o fundo do menu:
+    fundo liso e as mesmas ondas que o jogo desenha no chao (bs.water_bands)."""
     size = ppc * period
     k = 2  # desenha em 2x e reduz no fim (borda suave)
-    out = []
-    for name in ("clean", "dirty"):
-        base, band = WATER_COLORS[name]
-        rnd = random.Random(5)  # mesmo desenho nas duas texturas
-        s = pygame.Surface((size * k, size * k))
-        s.fill(base)
-        for i in range(4):  # faixas: ondas com numero inteiro de voltas (emendam dos lados)
-            y0 = (i + rnd.uniform(0.2, 0.8)) * size / 4
-            f1, f2 = rnd.choice((1, 2)), rnd.choice((2, 3))
-            p1, p2, p3 = rnd.uniform(0, math.tau), rnd.uniform(0, math.tau), rnd.uniform(0, math.tau)
-            top, bottom = [], []
-            for x in range(0, size + 1, 4):
-                t = math.tau * x / size
-                y = y0 + 10 * math.sin(f1 * t + p1)
-                thick = 2 + 6 * (0.5 + 0.5 * math.sin(f2 * t + p2)) + 9 * max(0.0, math.sin(t + p3)) ** 2
-                top.append((x, y))
-                bottom.append((x, y + thick))
-            pts = top + bottom[::-1]
-            for oy in (-size, 0, size):  # repete em cima e embaixo (emenda sem costura)
-                pygame.draw.polygon(s, band, [(x * k, (y + oy) * k) for x, y in pts])
-        out.append(pygame.transform.smoothscale(s, (size, size)))
-    return tuple(out)
+    base, band = bs.WATER_COLORS["clean"]
+    s = pygame.Surface((size * k, size * k))
+    s.fill(base)
+    n = round(period / bs.WATER_STEP)
+    for edge in bs.water_bands():
+        top = [(j * size / n, edge[j % n][0] * ppc) for j in range(n + 1)]
+        bottom = [(j * size / n, (edge[j % n][0] + edge[j % n][1]) * ppc) for j in range(n + 1)]
+        pts = top + bottom[::-1]
+        for oy in (-size, 0, size):  # repete em cima e embaixo (emenda sem costura)
+            pygame.draw.polygon(s, band, [(x * k, (y + oy) * k) for x, y in pts])
+    return pygame.transform.smoothscale(s, (size, size))
 
 
 # --- barco (modelo 3D renderizado em varios angulos) ----------------------------
@@ -886,7 +862,6 @@ SIMPLE = {
     "mancha_4.png": lambda: make_slick(4),
     "onda.png": make_ripple,
     "sombra.png": make_shadow,
-    "seta_guia.png": make_arrow,
     "painel.png": make_panel,
     "bussola.png": make_compass,
     "bussola_seta.png": make_compass_arrow,
@@ -899,11 +874,11 @@ SIMPLE = {
 GROUPS = {"barco.json": (BOAT_FILES + (BOAT_EXTRA if os.path.exists(os.path.join(ASSETS_DIR, BOAT_SVG)) else []),
                          boat_frames)}
 MENU = (MENU_FILES, menu_frames)  # precisa do barco-cartoon.svg e da fonte Creepster
-WATER = ("agua_limpa.png", "agua_poluida.png")
+WATER = "agua_limpa.png"
 
 
 def missing():
-    names = list(SIMPLE) + list(WATER) + [n for js, (files, _) in GROUPS.items() for n in files + [js]] + MENU[0]
+    names = list(SIMPLE) + [WATER] + [n for js, (files, _) in GROUPS.items() for n in files + [js]] + MENU[0]
     return [n for n in names if not os.path.exists(os.path.join(ASSETS_DIR, n))]
 
 
@@ -918,11 +893,9 @@ def generate(force=False, log=print):
         if need(name):
             pygame.image.save(maker(), os.path.join(ASSETS_DIR, name))
             log("  " + name)
-    if any(need(n) for n in WATER):
-        for name, img in zip(WATER, make_water(bs.WATER_PPC, bs.WATER_PERIOD)):
-            if need(name):
-                pygame.image.save(img, os.path.join(ASSETS_DIR, name))
-                log("  " + name)
+    if need(WATER):
+        pygame.image.save(make_water(WATER_TEX_PPC, bs.WATER_PERIOD), os.path.join(ASSETS_DIR, WATER))
+        log("  " + WATER)
     for js, (files, maker) in GROUPS.items():
         if any(need(n) for n in files + [js]):
             maker()
@@ -941,8 +914,7 @@ if __name__ == "__main__":
         if "--barco-svg" in sys.argv or "--menu" in sys.argv:
             menu_frames()  # o barco do menu e feito do mesmo desenho
         if "--agua" in sys.argv:
-            for name, img in zip(WATER, make_water(bs.WATER_PPC, bs.WATER_PERIOD)):
-                pygame.image.save(img, os.path.join(ASSETS_DIR, name))
+            pygame.image.save(make_water(WATER_TEX_PPC, bs.WATER_PERIOD), os.path.join(ASSETS_DIR, WATER))
     else:
         generate(force="--todos" in sys.argv)
     print("Pronto.")

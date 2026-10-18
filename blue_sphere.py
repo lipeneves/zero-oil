@@ -1,10 +1,11 @@
 """Zero Oil - Barco Catador de Lixo, em Pygame puro.
 
 Releitura da fase especial do Sonic 3 & Knuckles: um barco limpando um rio
-poluido. O jogo so desenha imagens (pasta assets/): o chao de agua e esticado em
-faixas com perspectiva (estilo "Mode 7"), com as manchas, as setas do guia
-e o chao da estacao pintados nele; o barco e um sprite pre-renderizado e o
-resto (boias, marcador da estacao...) sao imagens em pe (tudo gerado por gerar_assets.py).
+poluido. O chao de agua tem perspectiva (estilo "Mode 7"): as ondas sao
+poligonos projetados direto na tela, e as manchas, as setas do guia e o chao
+da estacao sao imagens deitadas nele, esticadas em faixas. O resto vem da pasta
+assets/: o barco e um sprite pre-renderizado e as boias, o marcador da
+estacao... sao imagens em pe (tudo gerado por gerar_assets.py).
 
 Corrida infinita: limpe um rio atras do outro; cada rio e um pouco mais
 dificil (mais oleo, cones, jatos e velocidade). A corrida acaba quando os
@@ -28,6 +29,7 @@ Controles:
   R                       recomecar a corrida na hora
   Esc                     pausar (no menu principal: sair)
 """
+import bisect
 import json
 import math
 import os
@@ -55,9 +57,15 @@ FOCAL = 520.0
 Y0 = 150         # linha da tela onde fica o eixo optico
 RNG = 13         # casas desenhadas em cada direcao
 LIM = 13.5       # distancia maxima desenhada
-WATER_PPC = 56   # pixels por casa na textura da agua
-WATER_PERIOD = 4 # a textura da agua se repete a cada 4 casas
+GROUND_PPC = 112 # pixels por casa das imagens deitadas no chao (manchas, setas, estacao)
+WATER_PERIOD = 4 # o desenho das ondas se repete a cada 4 casas
+WATER_STEP = WATER_PERIOD / 32  # casas entre os pontos das ondas
 STRIP = 2        # altura (px) de cada faixa do chao na tela
+GROUND_WHOLE = 1.5  # imagens do chao ate este tamanho (casas) sao esticadas inteiras
+WATER_COLORS = {  # (fundo, ondas); o jogo mistura as duas conforme a poluicao
+    "clean": ((74, 178, 228), (124, 205, 240)),
+    "dirty": ((84, 96, 58), (108, 122, 78)),
+}
 
 CAM = (0.0, R + CAM_H, -CAM_B)
 CP, SP = math.cos(PITCH), math.sin(PITCH)
@@ -250,21 +258,75 @@ def floor_f(sy):
     return z - CAM_B
 
 
+def floor_half(f):
+    """Meia largura (em casas) do chao que aparece na tela a f casas a frente."""
+    return (W / 2) * (CAM_H * SP + (f + CAM_B) * CP) / FOCAL
+
+
+def floor_y(f):
+    """Linha da tela do ponto do chao f casas a frente do jogador."""
+    z = f + CAM_B
+    return Y0 - (z * SP - CAM_H * CP) * FOCAL / (CAM_H * SP + z * CP)
+
+
 def build_strips():
-    """Para cada faixa horizontal da tela, o retangulo correspondente na
-    textura vista de cima (relativo ao jogador). E constante: a camera e fixa."""
+    """Para cada faixa horizontal da tela: (y, altura, f longe, f perto, meia
+    largura), com as distancias em casas a partir do jogador. E constante: a
+    camera e fixa. Tambem devolve ate onde (em casas) o chao aparece."""
     strips, reach = [], 0.0
     for y in range(0, H, STRIP):
         h = min(STRIP, H - y)
         f_top, f_bot = floor_f(y), floor_f(y + h)
-        cz = CAM_H * SP + (floor_f(y + h / 2) + CAM_B) * CP
-        half = (W / 2) * cz / FOCAL
-        rect = pygame.Rect(round(-half * WATER_PPC), round(-f_top * WATER_PPC),
-                           max(1, round(2 * half * WATER_PPC)),
-                           max(1, round((f_top - f_bot) * WATER_PPC)))
-        strips.append((y, h, rect))
+        half = floor_half(floor_f(y + h / 2))
+        strips.append((y, h, f_top, f_bot, half))
         reach = max(reach, math.hypot(half, f_top), math.hypot(half, f_bot))
     return strips, reach
+
+
+def water_bands():
+    """Ondas da agua vista de cima: faixas claras que atravessam o desenho (de
+    WATER_PERIOD casas, repetido nas duas direcoes). Para cada uma, a borda de
+    cima e a grossura (em casas) a cada WATER_STEP casas, numa volta do desenho."""
+    rnd = random.Random(5)
+    n = round(WATER_PERIOD / WATER_STEP)
+    bands = []
+    for i in range(4):
+        y0 = (i + rnd.uniform(0.2, 0.8)) * WATER_PERIOD / 4
+        f1, f2 = rnd.choice((1, 2)), rnd.choice((2, 3))
+        p1, p2, p3 = rnd.uniform(0, math.tau), rnd.uniform(0, math.tau), rnd.uniform(0, math.tau)
+        edge = []
+        for j in range(n):  # ondas com numero inteiro de voltas: emendam sem costura
+            t = math.tau * j / n
+            top = y0 + 10 / 56 * math.sin(f1 * t + p1)
+            thick = (2 + 6 * (0.5 + 0.5 * math.sin(f2 * t + p2)) + 9 * max(0.0, math.sin(t + p3)) ** 2) / 56
+            edge.append((top, thick))
+        bands.append(edge)
+    return bands
+
+
+def slab_span(poly, v0, v1):
+    """Trecho em u (min, max) do poligono convexo 'poly' [(u, v)...] entre as
+    linhas v0 e v1, ou None se ele nao passa por ali."""
+    us = [u for u, v in poly if v0 <= v <= v1]
+    for (ua, va), (ub, vb) in zip(poly, poly[1:] + poly[:1]):
+        for c in (v0, v1):
+            if (va - c) * (vb - c) < 0:
+                us.append(ua + (ub - ua) * (c - va) / (vb - va))
+    return (min(us), max(us)) if us else None
+
+
+def clip_near(poly, f_min):
+    """Corta o poligono [(l, f)...] do chao onde f < f_min (atras da tela)."""
+    out = []
+    prev = poly[-1]
+    for cur in poly:
+        if (cur[1] >= f_min) != (prev[1] >= f_min):
+            t = (f_min - prev[1]) / (cur[1] - prev[1])
+            out.append((prev[0] + (cur[0] - prev[0]) * t, f_min))
+        if cur[1] >= f_min:
+            out.append(cur)
+        prev = cur
+    return out
 
 
 # --- jogo ---------------------------------------------------------------------
@@ -285,11 +347,8 @@ class Game:
             FISH: [load_image("base/peixe.svg", (96, 96)), load_image("base/peixe_nadando.svg", (96, 72))],
         }
         self.img = {n: load_image(n + ".png") for n in (
-            "onda", "sombra", "seta_guia", "painel", "bussola", "bussola_seta",
+            "onda", "sombra", "painel", "bussola", "bussola_seta",
             "menu_painel")}
-        # a torre vem direto do svg, num tamanho grande para ficar nitida de perto
-        # chao da estacao: 56 px por casa, como a textura da agua (3 x 4,5 casas)
-        self.img["estacao_chao"] = load_image("base/estacao_chao.svg", (3 * WATER_PPC, 9 * WATER_PPC // 2))
         # marcador da estacao: bolha verde com o simbolo de reciclagem e o contador "0/x"
         self.img["popup_contador"] = load_image("base/popup_contador.svg", (240, 120))
         self.img["coracao"] = load_image("base/coracao.svg", (28, 26))  # vidas no placar
@@ -315,17 +374,22 @@ class Game:
             rows, cols = len(meta["rastro"]["curvas"]), len(self.boat_frames) - 2
             tw, th = sheet.get_width() // cols, sheet.get_height() // rows
             self.boat_trail = [[sheet.subsurface((c * tw, r * th, tw, th)) for c in range(cols)] for r in range(rows)]
-        # versoes do tamanho de 1 casa na textura da agua (onde sao pintadas)
-        self.slicks_ground = [pygame.transform.smoothscale(m, (WATER_PPC, WATER_PPC)) for m in self.slicks]
-        arrow = pygame.transform.smoothscale(self.img["seta_guia"], (int(WATER_PPC * 0.6),) * 2)
+        # imagens deitadas no chao, vistas de cima, com GROUND_PPC px por casa
+        ppc = GROUND_PPC
+        self.slicks_ground = [pygame.transform.smoothscale(m, (ppc, ppc)) for m in self.slicks]
+        arrow = load_image("base/seta_guia.svg", (int(ppc * 0.6),) * 2)
         self.arrows_ground = {d: pygame.transform.rotate(arrow, -90 * i) for i, d in enumerate(DIRS)}
-        tile = (WATER_PPC * WATER_PERIOD,) * 2
-        self.water_clean = load_image("agua_limpa.png", tile)
-        self.water_dirty = load_image("agua_poluida.png", tile)
-        self.water_tiles = {}
-        self.strips, reach = build_strips()
-        size = 2 * int(reach * WATER_PPC) + 8
-        self.water_buf = pygame.Surface((size, size))
+        # chao da estacao (3 x 4,5 casas), desenhado com a estacao "para cima"
+        self.img["estacao_chao"] = load_image("base/estacao_chao.svg", (3 * ppc, 9 * ppc // 2))
+        self.ground_turns = {}  # imagens do chao ja giradas para a camera parada
+        self.ground_turning = (None, {})  # e para o angulo do quadro atual, durante o giro
+        # faixas da tela e o trecho do chao que aparece (com folga), em (lado, frente)
+        self.strips, self.reach = build_strips()
+        self.strip_keys = [-f_top for _, _, f_top, _, _ in self.strips]  # crescente, para o bisect
+        self.f_far, self.f_near = floor_f(0) + 0.3, floor_f(H) - 0.5
+        hf, hn = floor_half(self.f_far) + 0.3, floor_half(self.f_near) + 0.3
+        self.view_box = [(-hn, self.f_near), (hn, self.f_near), (hf, self.f_far), (-hf, self.f_far)]
+        self.water_bands = water_bands()
         self.ground = project(surface_point(0, 0))           # onde o barco encosta na agua
         self.cache = {}      # sprites pequenos redimensionados
         self.big_cache = {}  # quadros grandes (barco no ar, estacao) redimensionados
@@ -377,6 +441,7 @@ class Game:
         # chao da estacao girado para o lado em que ela fica (a imagem e feita com ela "para cima")
         turns = DIRS.index(self.dock_side) if self.dock_side in DIRS else 0
         self.station_floor = pygame.transform.rotate(self.img["estacao_chao"], -90 * turns)
+        self.ground_turns.clear()
         self.guide = []          # casas do caminho ate a descarga
         self.guide_turn = None   # -1 esquerda, 0 em frente, 1 direita (na proxima casa)
         self.guide_target = None
@@ -922,34 +987,85 @@ class Game:
         scr.blit(self.scaled(("onda",), ripple, rw, rh), (x - rw / 2, y - rh / 2 + bob))
         scr.blit(img, (x - s / 2, y - s + sink + bob), area=pygame.Rect(0, 0, s, s - sink))
 
-    def paint_ground(self, buf):
-        """Pinta na textura da agua (vista de cima, antes de girar e esticar):
-        as manchas, o chao da estacao e as setas do guia. Assim eles ganham a
-        perspectiva e o giro da agua de graca."""
-        size = buf.get_width()
-        half = size / 2
+    def ground_turned(self, img, deg, still):
+        """Imagem do chao girada junto com a camera. Com a camera parada fica
+        guardada; girando, so vale para o quadro atual (as manchas repetem a imagem)."""
+        if not still and self.ground_turning[0] != deg:
+            self.ground_turning = (deg, {})
+        cache = self.ground_turns if still else self.ground_turning[1]
+        key = (img, deg)
+        if key in cache:
+            return cache[key]
+        if deg % 90 == 0:
+            out = pygame.transform.rotate(img, deg) if deg % 360 else img
+        else:
+            out = pygame.transform.rotozoom(img, deg, 1)  # suave nos angulos quebrados
+        cache[key] = out
+        return out
 
-        def at(gx, gy):  # casa do mapa -> pixel na textura (com o mapa dando a volta)
-            dx = (gx - self.px + N / 2) % N - N / 2
-            dy = (gy - self.py + N / 2) % N - N / 2
-            return half + dx * WATER_PPC, half + dy * WATER_PPC
+    def ground_image(self, img, dx, dy, view, alpha=None):
+        """Desenha uma imagem deitada no chao (vista de cima, GROUND_PPC px por
+        casa) com o centro a (dx, dy) casas do jogador: ela gira com a camera e
+        ganha a perspectiva do chao. As pequenas (setas, manchas) sao esticadas
+        inteiras de uma vez (borda lisa, sem degraus ao andar); as grandes
+        (chao da estacao), faixa por faixa, onde a perspectiva pesa mais."""
+        deg, ca, sa, still = view
+        l, f = dx * ca + dy * sa, dx * sa - dy * ca
+        rad = math.hypot(*img.get_size()) / 2 / GROUND_PPC  # cabe neste raio em qualquer giro
+        if f - rad > self.f_far or f + rad < self.f_near or abs(l) - rad > floor_half(f + rad):
+            return  # fora da tela: nem gira
+        rimg = self.ground_turned(img, deg, still)
+        iw, ih = rimg.get_size()
+        rw, rh = iw / GROUND_PPC, ih / GROUND_PPC
+        far, near = f + rh / 2, f - rh / 2  # bordas de cima e de baixo da imagem
+        if near > self.f_far or far < self.f_near or abs(l) - rw / 2 > floor_half(far):
+            return
+        scr = self.screen
+        if max(rw, rh) <= GROUND_WHOLE:  # pequena: a perspectiva quase nao muda dentro dela
+            y0, y1 = floor_y(far), floor_y(near)
+            k = W / (2 * floor_half(f))  # px da tela por casa no meio da imagem
+            dw, dh = round(rw * k), round(y1 - y0)
+            if dw < 1 or dh < 1:
+                return
+            piece = pygame.transform.smoothscale(rimg, (dw, dh))
+            if alpha is not None:
+                piece.set_alpha(alpha)
+            scr.blit(piece, (round(W / 2 + l * k - dw / 2), round(y0)))
+            return
+        i0 = max(0, bisect.bisect_left(self.strip_keys, -far) - 1)
+        i1 = bisect.bisect_left(self.strip_keys, -near)
+        for y, h, f_top, f_bot, half in self.strips[i0:i1]:
+            r0 = max(0, int((far - f_top) * GROUND_PPC))  # linhas da imagem nesta faixa
+            r1 = min(ih, max(r0 + 1, math.ceil((far - f_bot) * GROUND_PPC)))
+            if r0 >= r1:
+                continue
+            k = W / (2 * half)  # px da tela por casa nesta faixa
+            x0, dw = W / 2 + (l - rw / 2) * k, round(rw * k)
+            if dw < 1 or x0 > W or x0 + dw < 0:
+                continue
+            piece = pygame.transform.smoothscale(rimg.subsurface((0, r0, iw, r1 - r0)), (dw, h))
+            if alpha is not None:
+                piece.set_alpha(alpha)
+            scr.blit(piece, (round(x0), y))
 
-        r = int(half / WATER_PPC) + 1
+    def paint_ground(self, view):
+        """Imagens deitadas na agua: as manchas, o chao da estacao e as setas do guia."""
+        def at(gx, gy):  # casa do mapa -> distancia ate o jogador (com o mapa dando a volta)
+            return (gx - self.px + N / 2) % N - N / 2, (gy - self.py + N / 2) % N - N / 2
+
+        r = int(self.reach) + 1
         ipx, ipy = round(self.px), round(self.py)
-        c = WATER_PPC / 2
+        slicks = self.slicks_ground
         for cy in range(ipy - r, ipy + r + 1):
             row = self.grid[cy % N]
             for cx in range(ipx - r, ipx + r + 1):
                 if row[cx % N] == OIL:
-                    x, y = at(cx, cy)
-                    v = ((cx % N) * 7 + (cy % N) * 13) % len(self.slicks_ground)
-                    buf.blit(self.slicks_ground[v], (x - c, y - c))
+                    v = ((cx % N) * 7 + (cy % N) * 13) % len(slicks)
+                    self.ground_image(slicks[v], *at(cx, cy), view)
         if self.dock_pos:
             # chao: 3 casas de vaga + 1,5 de plataforma -> o meio fica 0,25 casa para longe da estacao
             sx, sy = self.dock_side
-            x, y = at(self.dock_pos[0] - sx * 0.25, self.dock_pos[1] - sy * 0.25)
-            floor = self.station_floor
-            buf.blit(floor, (x - floor.get_width() / 2, y - floor.get_height() / 2))
+            self.ground_image(self.station_floor, *at(self.dock_pos[0] - sx * 0.25, self.dock_pos[1] - sy * 0.25), view)
         path = self.guide
         for i in range(min(len(path) - 1, 18)):
             (ax, ay), (bx, by) = path[i], path[i + 1]
@@ -957,41 +1073,62 @@ class Game:
             img = self.arrows_ground.get(d)
             if img is None:
                 continue
-            x, y = at(ax + d[0] * 0.5, ay + d[1] * 0.5)
-            img.set_alpha(int(150 + 105 * (0.5 + 0.5 * math.sin(self.anim * 6 - i * 0.6))))
-            buf.blit(img, (x - img.get_width() / 2, y - img.get_height() / 2))
+            alpha = int(150 + 105 * (0.5 + 0.5 * math.sin(self.anim * 6 - i * 0.6)))
+            self.ground_image(img, *at(ax + d[0] * 0.5, ay + d[1] * 0.5), view, alpha)
+
+    def draw_waves(self, ca, sa, color):
+        """Faixas claras das ondas, desenhadas como poligonos ja em perspectiva.
+        So entra o pedaco de cada faixa que cai no trecho do chao visivel."""
+        drift = self.anim * 0.15  # correnteza lenta
+        ou, ov = self.px + drift, self.py + drift * 0.6  # onde o jogador esta no desenho das ondas
+        box = [(ou + l * ca + f * sa, ov + l * sa - f * ca) for l, f in self.view_box]
+        vmin, vmax = min(v for _, v in box), max(v for _, v in box)
+        n = len(self.water_bands[0])
+        p, step = WATER_PERIOD, WATER_STEP
+        f_min, scr = self.f_near, self.screen
+        for rep in range(math.floor(vmin / p) - 1, math.floor(vmax / p) + 1):
+            base = rep * p
+            for edge in self.water_bands:
+                y0 = base + edge[0][0]
+                span = slab_span(box, y0 - 0.3, y0 + 0.6)  # a onda sobe e desce ~0,2 casa
+                if span is None:
+                    continue
+                j0, j1 = math.floor(span[0] / step), math.ceil(span[1] / step)
+                top, bottom = [], []
+                for j in range(j0, j1 + 1):
+                    v, thick = edge[j % n]
+                    du, dv = j * step - ou, base + v - ov
+                    top.append((du * ca + dv * sa, du * sa - dv * ca))
+                    dv += thick
+                    bottom.append((du * ca + dv * sa, du * sa - dv * ca))
+                poly = clip_near(top + bottom[::-1], f_min)
+                if len(poly) < 3:
+                    continue
+                pts = []
+                for l, f in poly:  # chao -> tela (mesma camera do project)
+                    z = f + CAM_B
+                    k = FOCAL / (CAM_H * SP + z * CP)
+                    pts.append((W / 2 + l * k, Y0 - (z * SP - CAM_H * CP) * k))
+                pygame.draw.polygon(scr, color, pts)
+                pygame.draw.aalines(scr, color, True, pts)  # borda lisa
 
     def draw_water(self):
-        """Chao estilo "Mode 7": monta a agua vista de cima ao redor do jogador,
-        gira conforme a direcao e estica cada faixa horizontal na tela."""
-        buf = self.water_buf
-        size = buf.get_width()
-        level = round(self.pollution() * 24)
-        tile = self.water_tiles.get(level)
-        if tile is None:
-            tile = self.water_clean.copy()
-            dirty = self.water_dirty.copy()
-            dirty.set_alpha(int(255 * level / 24))
-            tile.blit(dirty, (0, 0))
-            self.water_tiles[level] = tile
-        tw = tile.get_width()
-        drift = self.anim * 0.15  # correnteza lenta
-        ox = int((self.px + drift) * WATER_PPC - size / 2) % tw
-        oy = int((self.py + drift * 0.6) * WATER_PPC - size / 2) % tw
-        for y in range(-oy, size, tw):
-            for x in range(-ox, size, tw):
-                buf.blit(tile, (x, y))
-        self.paint_ground(buf)
-        ang = math.degrees(self.view)
-        if self.view == self.heading and self.turn_t < 0 and not self.demo:  # camera parada: angulo exato
-            step = math.degrees(TURN_ANGLE)
-            ang = round(ang / step) * step
-        rot = pygame.transform.rotate(buf, ang) if ang % 360 else buf
-        cx, cy = rot.get_width() // 2, rot.get_height() // 2
-        scr = self.screen
-        for y, h, rect in self.strips:
-            strip = rot.subsurface(rect.move(cx, cy))
-            scr.blit(pygame.transform.scale(strip, (W, h)), (0, y))
+        """Chao estilo "Mode 7" desenhado direto na tela: fundo liso, ondas em
+        perspectiva e as imagens deitadas na agua, tudo girando com a camera."""
+        a = self.view
+        still = self.view == self.heading and self.turn_t < 0 and not self.demo
+        if still:  # camera parada: angulo exato
+            a = round(a / TURN_ANGLE) * TURN_ANGLE
+        ca, sa = math.cos(a), math.sin(a)
+        k = self.pollution()
+        (base0, wave0), (base1, wave1) = WATER_COLORS["clean"], WATER_COLORS["dirty"]
+
+        def mix(c0, c1):
+            return tuple(round(x + (y - x) * k) for x, y in zip(c0, c1))
+
+        self.screen.fill(mix(base0, base1))
+        self.draw_waves(ca, sa, mix(wave0, wave1))
+        self.paint_ground((round(math.degrees(a), 2), ca, sa, still))
 
     def boat_layers(self, frame):
         """Quadro do barco com o que muda no jogo: o oleo na cacamba (enche

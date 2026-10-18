@@ -18,9 +18,9 @@ Para voltar ao desenho original, apague o arquivo. Ele é recriado na próxima v
 
 Para recriar **tudo**, rode `python gerar_assets.py --todos`. Atenção: isso sobrescreve a sua arte.
 
-Use PNG com fundo transparente. As texturas de água são a exceção.
+Use PNG com fundo transparente. A textura de água do menu é a exceção.
 
-**Água:** recrie só `agua_limpa.png` e `agua_poluida.png` com `python gerar_assets.py --agua`.
+**Água:** a água do jogo não é imagem: o fundo e as ondas são desenhados pelo código (cores em `WATER_COLORS` e formato das ondas em `water_bands`, no `blue_sphere.py`). Só o fundo do menu usa a textura `agua_limpa.png`, feita com as mesmas ondas; recrie com `python gerar_assets.py --agua`.
 
 ## Barco (sempre visto de costas)
 
@@ -49,7 +49,7 @@ Use PNG com fundo transparente. As texturas de água são a exceção.
 | `estacao_torre.svg` | Torre de vidro redonda antiga (não usada: o tanque de vidro agora é quadrado e desenhado em 3D pelo jogo, ver `TANK_*` em `blue_sphere.py`) | 240×500 |
 
 **`base/estacao_chao.svg`**
-- **Como aparece:** é pintado na água, então ganha a perspectiva e o giro corretos de graça.
+- **Como aparece:** fica deitado na água; o jogo gira junto com a câmera e estica em faixas com a perspectiva do chão.
 - **Tamanho:** equivale a 3 casas de largura por 4,5 de profundidade, com 56 unidades por casa (168×252). A 1,5 casa de cima fica embaixo da plataforma e as 3 de baixo são a vaga (quadrada). Mantenha esse tamanho ao editar.
 - **Orientação:** desenhe com a estação **para cima**. O jogo gira a imagem conforme a posição da estação no mapa.
 
@@ -73,10 +73,10 @@ Use PNG com fundo transparente. As texturas de água são a exceção.
 | Arquivo | O que é | Observação |
 |---|---|---|
 | `mancha_1.png` … `mancha_4.png` | Manchas de óleo pretas com contorno escuro (geradas por `make_slick` no `gerar_assets.py`) | Pintadas na água; a imagem inteira equivale a 1 casa |
-| `seta_guia.png` | Seta do caminho até a descarga | Pintada na água; desenhe apontando para cima |
+| `base/seta_guia.svg` | Seta do caminho até a descarga | Pintada na água; desenhe apontando para cima |
 | `onda.png` | Anel de onda em volta do que boia | O jogo achata conforme a perspectiva |
 | `sombra.png` | Sombra do barco no pulo | O jogo achata conforme a perspectiva |
-| `agua_limpa.png`, `agua_poluida.png` | Texturas da água | Precisam repetir sem emendas; o jogo ajusta para 224×224 |
+| `agua_limpa.png` | Água do fundo do menu | Precisa repetir sem emendas (224×224). A água do jogo é desenhada pelo código |
 
 ## Interface
 
