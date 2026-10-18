@@ -176,23 +176,45 @@ def make_spout():
     return s
 
 
+OIL_RGB = (43, 39, 51)  # = OIL_SVG (#2b2733), mas aqui o modulo ainda nao o conhece
+
+
+def _smooth_closed(pts, steps=16):
+    """Curva fechada suave (Catmull-Rom) passando pelos pontos."""
+    out = []
+    n = len(pts)
+    for i in range(n):
+        p0, p1, p2, p3 = pts[i - 1], pts[i], pts[(i + 1) % n], pts[(i + 2) % n]
+        for s in range(steps):
+            t = s / steps
+            t2, t3 = t * t, t * t * t
+            out.append(tuple(0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t
+                                    + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2
+                                    + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3) for k in (0, 1)))
+    return out
+
+
 def make_slick(seed):
-    """Mancha de oleo vista de cima. A imagem inteira equivale a 1 casa."""
-    size = 128
-    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    """Mancha de oleo vista de cima: uma poca escura, lisa, sem textura nem contorno, de formato
+    irregular (cada semente tem um tamanho e um jeito de borda). Desenhada 4x maior e reduzida,
+    para a borda ficar suave. A imagem inteira equivale a 1 casa."""
+    size, k = 128, 4
+    big = size * k
     rnd = random.Random(seed)
-    c = size / 2
-    ox, oy = rnd.uniform(-8, 8), rnd.uniform(-8, 8)
-    pts = []
-    for i in range(12):
-        a = i * math.tau / 12
-        r = rnd.uniform(0.3, 0.48) * size
-        pts.append((c + ox + math.cos(a) * r, c + oy + math.sin(a) * r * 0.85))
-    inner = [(c + ox + (x - c - ox) * 0.55, c + oy + (y - c - oy) * 0.55) for x, y in pts]
-    pygame.draw.polygon(s, (52, 56, 40), pts)
-    pygame.draw.polygon(s, (112, 92, 132), pts, 4)
-    pygame.draw.polygon(s, (30, 32, 25), inner)
-    return s
+    c = big / 2
+    base = rnd.uniform(0.25, 0.33) * big  # tamanho medio da mancha
+    squash = rnd.uniform(0.7, 0.95)  # achatada ou quase redonda
+    n = rnd.randint(9, 13)  # pontos de controle: mais pontos = borda mais ondulada
+    ctrl = []
+    for i in range(n):
+        a = i * math.tau / n + rnd.uniform(-0.12, 0.12)
+        r = base * rnd.uniform(0.82, 1.12)  # ondulacoes suaves, sem bicos
+        ctrl.append((c + math.cos(a) * r, c + math.sin(a) * r * squash))
+    blob = _smooth_closed(ctrl)
+
+    s = pygame.Surface((big, big), pygame.SRCALPHA)
+    pygame.draw.polygon(s, OIL_RGB + (255,), blob)
+    return pygame.transform.smoothscale(s, (size, size))
 
 
 def make_ripple():
