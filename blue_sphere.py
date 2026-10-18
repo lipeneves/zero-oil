@@ -361,6 +361,7 @@ class Game:
     def __init__(self, screen, demo=False):
         self.screen = screen
         self.demo = demo  # fundo do menu: camera girando devagar, sem placar
+        self.paused = False  # o menu de pausa esta por cima (esconde o aviso do centro)
         # textos do jogo: mesma fonte e contorno do marcador de reciclagem (estilo cartoon)
         rubik = os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf")
         self.font = pygame.font.Font(rubik, 34)
@@ -1286,7 +1287,7 @@ class Game:
             left = "último barco!" if self.lives == 1 else "restam %d barcos" % self.lives
             self.draw_banner([(self.fail_msg, self.font, (255, 255, 255)),
                               ("-1 barco  ·  " + left, self.small, (255, 230, 120))], 1.6, (214, 72, 72))
-        elif self.waiting:
+        elif self.waiting and not self.paused:
             self.text("APERTE QUALQUER TECLA PARA INICIAR", self.small, (W // 2, 170))
         elif self.msg_timer > 0:
             self.text(self.message, self.font, (W // 2, 170))
@@ -1429,14 +1430,10 @@ class App:
         self.game = None
         self.mode = "menu"  # menu, howto, game, pause
         self.sel = 0
-        self.img = {n: load_image(n + ".png") for n in ("logo", "menu_painel", "botao", "botao_selecionado")}
-        self.font = pygame.font.SysFont("arialblack,arial", 22, bold=True)
-        self.title = pygame.font.SysFont("arialblack,arial", 34, bold=True)
-        self.small = pygame.font.SysFont("arial", 19, bold=True)
         self.buttons = []
         # menu principal: agua rolando, barco andando na diagonal, titulo e botoes a direita
         self.menu_boat = [load_image("menu_barco_%d.png" % (i + 1)) for i in range(4)]
-        self.menu_img = {n: load_image("menu_%s.png" % n) for n in ("titulo", "botao", "botao_selecionado")}
+        self.menu_img = {"titulo": load_image("menu_titulo.png")}
         self.menu_water = load_image("agua_limpa.png")
         name, size, size_sel = MENU_BUTTON_FONT
         font = os.path.join(ASSETS_DIR, "fonts", name)
@@ -1524,28 +1521,6 @@ class App:
             if self.mode == "credits":
                 self.credits_scroll += CREDITS_SPEED * dt
 
-    def text(self, msg, font, center, color=(255, 255, 255)):
-        img = font.render(msg, True, color)
-        shadow = font.render(msg, True, (0, 0, 60))
-        rect = img.get_rect(center=center)
-        for ox, oy in ((-2, 0), (2, 0), (0, -2), (0, 2), (2, 2)):
-            self.screen.blit(shadow, rect.move(ox, oy))
-        self.screen.blit(img, rect)
-
-    def draw_buttons(self, top):
-        self.buttons = []
-        for i, label in enumerate(self.options()):
-            img = self.img["botao_selecionado" if i == self.sel else "botao"]
-            rect = img.get_rect(center=(W // 2, top + i * 52))
-            self.screen.blit(img, rect)
-            color = (70, 40, 0) if i == self.sel else (255, 255, 255)
-            txt = self.font.render(label, True, color)
-            if txt.get_width() > rect.w - 24:  # texto comprido: encolhe para caber no botao
-                k = (rect.w - 24) / txt.get_width()
-                txt = pygame.transform.smoothscale(txt, (int(txt.get_width() * k), int(txt.get_height() * k)))
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
-            self.buttons.append(rect)
-
     def draw_menu_bg(self, title=True):
         """Fundo do menu: a agua rola para tras do barco (que anda na direcao
         MENU_BOAT_ANGLE), o barco balanca com a espuma animada, e o titulo
@@ -1565,16 +1540,19 @@ class App:
             scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X, 74)))
 
     def draw_menu_button(self, label, center, sel):
-        img = self.menu_img["botao_selecionado" if sel else "botao"]
-        rect = img.get_rect(center=center)
-        self.screen.blit(img, rect)
-        face = rect.inflate(0, -9).move(0, -4)  # a parte de cima (sem o relevo embaixo)
-        font = self.menu_font_sel if sel else self.menu_font
-        txt = font.render(label, True, (20, 19, 24) if sel else (245, 250, 252))
-        if txt.get_width() > face.w - 30:  # texto comprido: encolhe para caber
-            k = (face.w - 30) / txt.get_width()
+        """Botao cartoon: contorno escuro e relevo embaixo; o selecionado num
+        amarelo suave, os outros quase brancos. Devolve o retangulo (para o mouse)."""
+        scr, ink = self.screen, (32, 36, 43)
+        rect = pygame.Rect(0, 0, 230, 44)
+        rect.center = center
+        pygame.draw.rect(scr, ink, rect.move(0, 4), border_radius=12)  # relevo embaixo
+        pygame.draw.rect(scr, (242, 214, 130) if sel else (232, 242, 250), rect, border_radius=12)
+        pygame.draw.rect(scr, ink, rect, 3, border_radius=12)
+        txt = self.menu_font.render(label, True, ink)
+        if txt.get_width() > rect.w - 30:  # texto comprido: encolhe para caber
+            k = (rect.w - 30) / txt.get_width()
             txt = pygame.transform.smoothscale(txt, (int(txt.get_width() * k), int(txt.get_height() * k)))
-        self.screen.blit(txt, txt.get_rect(center=(face.centerx, face.centery + 1)))
+        scr.blit(txt, txt.get_rect(center=(rect.centerx, rect.centery + 1)))
         return rect
 
     def draw_menu(self):
@@ -1588,6 +1566,19 @@ class App:
         msg = "RECORDE  %d  ·  RIO %d" % (rec["pontos"], rec["rio"]) if rec["pontos"] else "SETAS E ENTER, OU O MOUSE"
         img = self.sticker(msg, self.record_font)
         scr.blit(img, img.get_rect(center=(MENU_X, 418)))
+
+    def draw_pause(self):
+        """Pausa no visual do jogo: o jogo escurecido atras, o titulo com o
+        contorno do placar e os botoes cartoon."""
+        scr, game = self.screen, self.game
+        shade_ = pygame.Surface((W, H), pygame.SRCALPHA)
+        shade_.fill((0, 15, 30, 160))
+        scr.blit(shade_, (0, 0))
+        title = game.text_image("PAUSADO", game.font)
+        scr.blit(title, title.get_rect(center=(W // 2, H // 2 - 64)))
+        self.buttons = []
+        for i, label in enumerate(self.PAUSE):
+            self.buttons.append(self.draw_menu_button(label, (W // 2, H // 2 + 2 + i * 58), i == self.sel))
 
     def draw_credits(self):
         """Creditos no mesmo visual do menu: mesmo fundo, textos em adesivo
@@ -1718,15 +1709,10 @@ class App:
             self.draw_credits()
             return
         if self.mode in ("game", "pause"):
+            self.game.paused = self.mode == "pause"
             self.game.draw()
             if self.mode == "pause":
-                shade_ = pygame.Surface((W, H), pygame.SRCALPHA)
-                shade_.fill((0, 20, 40, 140))
-                scr.blit(shade_, (0, 0))
-                panel = self.img["menu_painel"]
-                scr.blit(panel, panel.get_rect(center=(W // 2, H // 2 + 10)))
-                self.text("PAUSADO", self.title, (W // 2, H // 2 - 60))
-                self.draw_buttons(H // 2 + 5)
+                self.draw_pause()
             return
         self.draw_howto()
 
