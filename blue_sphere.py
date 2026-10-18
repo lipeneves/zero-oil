@@ -1226,7 +1226,6 @@ class App:
         self.menu_font = pygame.font.Font(font, size)
         self.menu_font_sel = pygame.font.Font(font, size_sel)
         self.record_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 17)  # mais limpa
-        self.credit_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 13)
         self.menu_t = 0.0
         self.sticker_cache = {}
 
@@ -1349,9 +1348,6 @@ class App:
         msg = "RECORDE  %d  ·  RIO %d" % (rec["pontos"], rec["rio"]) if rec["pontos"] else "SETAS E ENTER, OU O MOUSE"
         img = self.sticker(msg, self.record_font)
         scr.blit(img, img.get_rect(center=(MENU_X, 418)))
-        # assinatura do estudio, discreta no canto
-        img = self.sticker("Creatius Games", self.credit_font, (245, 250, 252), (32, 36, 43), 0)
-        scr.blit(img, img.get_rect(bottomleft=(10, H - 8)))
 
     def sticker(self, msg, font, ink=(20, 19, 24), line=(245, 250, 252), depth=2):
         """Texto no estilo do titulo: letra de uma cor com contorno (e relevo
