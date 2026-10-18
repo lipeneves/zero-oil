@@ -22,8 +22,6 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 
 **Água:** a água do jogo não é imagem: o fundo e as ondas são desenhados pelo código (cores em `WATER_COLORS` e formato das ondas em `water_bands`, no `blue_sphere.py`). Só o fundo do menu usa a textura `agua_limpa.png`, feita com as mesmas ondas; recrie com `python gerar_assets.py --agua`.
 
-O visual da água é baseado no vetor ["Blue water surface template in cartoon style"](https://www.magnific.com/free-vector/blue-water-surface-template-cartoon-style_14803814.htm), de **brgfx**, no Magnific (antigo Freepik). Ele usa a licença gratuita do Freepik, que **exige crédito** ("Imagem de brgfx no Freepik"). O crédito está na tela de créditos do jogo; não remova.
-
 ## Barco (sempre visto de costas)
 
 | Arquivo | Quando aparece |
@@ -42,8 +40,6 @@ O visual da água é baseado no vetor ["Blue water surface template in cartoon s
 | Arquivo | O que é | Tamanho |
 |---|---|---|
 | `base/coracao.svg` | Coração vermelho do placar (um por vida), estilo cartoon: contorno escuro, sombra embaixo e brilho em cima; o jogo lê o SVG direto em 28×26 | 100×92 |
-
-O coração é baseado no vetor ["Estilo de desenho animado de coração"](https://www.magnific.com/br/vetores-gratis/estilo-de-desenho-animado-de-coracao_362088535.htm), de **juicy_fish**, no Magnific (antigo Freepik). A licença gratuita do Freepik **exige crédito** ("Imagem de juicy_fish no Freepik"). O crédito está na tela de créditos do jogo; não remova.
 
 ## Estação de reciclagem
 
@@ -70,8 +66,6 @@ O coração é baseado no vetor ["Estilo de desenho animado de coração"](https
 | `base/peixe.svg` | Peixe pulando, estilo cartoon (contorno escuro, brilho e barriga clara); o jogo lê o SVG direto | 96×96 | Virado para a direita |
 | `base/peixe_nadando.svg` | Peixe debaixo d'água | 96×72 | Silhueta escura com a barbatana laranja (cartoon) para fora |
 | `feixe_luz.png` | Feixe de luz sobre a estação | 32×256 | Transparência em degradê |
-
-A boia é baseada no ícone "Bóia" (estilo Lineal Color, pacote "Sea"), de **Nhor Phai**, no [Flaticon](https://www.flaticon.com/authors/nhor-phai). A licença gratuita do Flaticon **exige crédito** ("Ícone criado por Nhor Phai - Flaticon"). O crédito está na tela de créditos do jogo; não remova.
 
 ## Coisas deitadas na água (vistas de cima)
 
