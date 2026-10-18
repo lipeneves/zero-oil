@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <title>minimapa.svg</title>
+  <!-- moldura redonda do minimapa no estilo cartoon do barco: aro branco com contorno
+       escuro grosso por fora e um fino por dentro. O jogo desenha o mapa no circulo do
+       meio (raio 44, centro 54,54), por baixo desta moldura. -->
+  <circle cx="54" cy="54" r="47" fill="none" stroke="#fafafa" stroke-width="6"/>
+  <circle cx="54" cy="54" r="51.5" fill="none" stroke="#20242b" stroke-width="3"/>
+  <circle cx="54" cy="54" r="44.5" fill="none" stroke="#20242b" stroke-width="3"/>
+  <!-- brilho no aro, em cima a esquerda -->
+  <path d="M9.8 37.9 A47 47 0 0 1 37.9 9.8" fill="none" stroke="#bfe6ff" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

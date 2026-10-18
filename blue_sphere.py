@@ -86,6 +86,8 @@ POPUP_LIFT = 0.15     # altura do marcador de reciclagem acima da agua (casas), 
 DOCK_CLEAR = 2        # casas livres em volta da estacao (mais 3 na frente da vaga)
 LIVES_START = 3       # barcos no inicio da corrida
 BELT_TIME = 0.45      # segundos que o oleo recolhido leva para descer a esteira ate a cacamba
+MAP_CELL = 6         # minimapa: pixels por casa no desenho (reduzido para 3 na tela)
+MAP_RADIUS = 44      # raio do circulo do minimapa na tela
 FISH_SCALE = 0.62     # tamanho do peixe em relacao a casa (1 = a casa toda)
 LIGHT_BLINK = 0.8     # a luz em cima do barco pisca a cada 0.8 s (acesa na primeira metade)
 LIVES_MAX = 5
@@ -284,13 +286,16 @@ class Game:
         }
         self.img = {n: load_image(n + ".png") for n in (
             "onda", "sombra", "seta_guia", "painel", "bussola", "bussola_seta",
-            "minimapa", "menu_painel")}
+            "menu_painel")}
         # a torre vem direto do svg, num tamanho grande para ficar nitida de perto
         # chao da estacao: 56 px por casa, como a textura da agua (3 x 4,5 casas)
         self.img["estacao_chao"] = load_image("base/estacao_chao.svg", (3 * WATER_PPC, 9 * WATER_PPC // 2))
         # marcador da estacao: bolha verde com o simbolo de reciclagem e o contador "0/x"
         self.img["popup_contador"] = load_image("base/popup_contador.svg", (240, 120))
         self.img["coracao"] = load_image("base/coracao.svg", (28, 26))  # vidas no placar
+        # minimapa: moldura redonda e a setinha do barco no meio
+        self.img["minimapa"] = load_image("base/minimapa.svg", (108, 108))
+        self.img["minimapa_barco"] = load_image("base/minimapa_barco.svg", (16, 16))
         self.popup_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 44)
         self.popup_cache = {}
         self.slicks = [load_image("mancha_%d.png" % i) for i in range(1, 5)]
@@ -324,8 +329,12 @@ class Game:
         self.ground = project(surface_point(0, 0))           # onde o barco encosta na agua
         self.cache = {}      # sprites pequenos redimensionados
         self.big_cache = {}  # quadros grandes (barco no ar, estacao) redimensionados
-        self.minimap = pygame.Surface((N, N))  # 1 pixel por casa (ampliado na tela)
-        self.map_arrow = pygame.transform.smoothscale(self.img["bussola_seta"], (14, 14))
+        self.minimap = pygame.Surface((N * MAP_CELL, N * MAP_CELL))  # desenhado grande e reduzido
+        # mascara redonda do minimapa (desenhada 4x maior e reduzida: borda lisa)
+        r = MAP_RADIUS
+        mask = pygame.Surface((8 * r, 8 * r), pygame.SRCALPHA)
+        pygame.draw.circle(mask, (255, 255, 255, 255), (4 * r, 4 * r), 4 * r)
+        self.map_mask = pygame.transform.smoothscale(mask, (2 * r, 2 * r))
         self.fonts = {}
         self.reset_run()
         if demo:  # fundo do menu: um rio mais cheio
@@ -1097,36 +1106,54 @@ class Game:
         elif self.msg_timer > 0:
             self.text(self.message, self.font, (W // 2, 170))
 
-    MAP_COLORS = {OIL: (25, 25, 20), TRASH: (25, 25, 20), FISH: (255, 140, 30), BUOY: (235, 45, 45),
-                  SPOUT: (215, 245, 255), DOCK: (255, 215, 60), STATION: (90, 205, 95)}
+    # cores do minimapa (estilo cartoon: cada coisa e uma bolinha com contorno escuro)
+    MAP_COLORS = {OIL: (12, 12, 16), TRASH: (12, 12, 16), FISH: (255, 140, 30), BUOY: (235, 55, 55),
+                  SPOUT: (225, 248, 255), DOCK: (255, 215, 60)}
+    MAP_LINE = (32, 36, 43)  # #20242b, o contorno do barco
 
     def draw_minimap(self):
-        """Mapa do rio inteiro no canto: centrado no barco (o rio da a volta nas
-        bordas) e girado junto com a camera (para cima = para frente)."""
-        m = self.minimap
-        m.fill((25, 95, 135) if self.pollution() < 0.5 else (60, 80, 55))
+        """Mapa do rio inteiro no canto, redondo e no estilo cartoon: centrado no
+        barco (o rio da a volta nas bordas) e girado junto com a camera (para
+        cima = para frente)."""
+        m, cs = self.minimap, MAP_CELL
+        m.fill((70, 165, 210) if self.pollution() < 0.5 else (105, 125, 80))
         x0, y0 = round(self.px) - N // 2, round(self.py) - N // 2
-        colors = self.MAP_COLORS
+        cells = []
         for y in range(N):
             row = self.grid[(y0 + y) % N]
             for x in range(N):
                 c = row[(x0 + x) % N]
-                if c:
-                    m.set_at((x, y), colors[c])
-        if self.need_unload:  # caminho do guia ate a estacao
+                if c and c != STATION:  # a estacao fica de fora: o ponto e so o quadrado da vaga
+                    cells.append((x * cs + cs / 2, y * cs + cs / 2, c))
+        # duas passadas: primeiro todos os contornos, depois os recheios. Assim as
+        # casas vizinhas (blocos de oleo, a vaga) viram uma forma so com um contorno
+        for line in (True, False):
+            for cx, cy, c in cells:
+                grow = 2 if line else 0
+                color = self.MAP_LINE if line else self.MAP_COLORS[c]
+                if c == DOCK:  # a vaga: quadradinhos que se emendam num quadrado so
+                    side = cs + 2 * grow
+                    pygame.draw.rect(m, color, (cx - side / 2, cy - side / 2, side, side))
+                else:
+                    r = (cs * 0.75 if c in (OIL, TRASH) else cs * 0.45) + grow
+                    pygame.draw.circle(m, color, (cx, cy), r)
+        if self.need_unload:  # caminho do guia ate a estacao: pontinhos claros
             for gx, gy in self.guide[1:]:
-                m.set_at(((gx - x0) % N, (gy - y0) % N), (255, 245, 170))
-        size = 96
-        big = pygame.transform.scale(m, (size, size))
-        rot = pygame.transform.rotate(big, math.degrees(self.view))
-        area = pygame.Rect(0, 0, size, size)
-        area.center = rot.get_rect().center
+                pos = (((gx - x0) % N) * cs + cs / 2, ((gy - y0) % N) * cs + cs / 2)
+                pygame.draw.circle(m, (255, 245, 170), pos, cs * 0.25)
+        # gira suave e reduz para 3 px por casa, depois recorta o circulo do meio
+        rot = pygame.transform.rotozoom(m, math.degrees(self.view), 3 / cs)
+        r = MAP_RADIUS
+        disc = pygame.Surface((2 * r, 2 * r), pygame.SRCALPHA)
+        disc.blit(rot, (r - rot.get_width() / 2, r - rot.get_height() / 2))
+        disc.blit(self.map_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         frame = self.img["minimapa"]
         x, y = W - frame.get_width() - 10, H - frame.get_height() - 10
+        center = (x + frame.get_width() // 2, y + frame.get_height() // 2)
+        self.screen.blit(disc, disc.get_rect(center=center))
         self.screen.blit(frame, (x, y))
-        self.screen.blit(rot, (x + 6, y + 6), area=area)
-        center = (x + 6 + size // 2 + 1, y + 6 + size // 2 + 1)
-        self.screen.blit(self.map_arrow, self.map_arrow.get_rect(center=center))
+        arrow = self.img["minimapa_barco"]
+        self.screen.blit(arrow, arrow.get_rect(center=center))
 
     def draw_gameover(self):
         """Fim da corrida: so o essencial, num painel central sobre o jogo escurecido."""

@@ -220,16 +220,6 @@ def make_compass():
     return s
 
 
-def make_minimap_frame():
-    """Moldura do minimapa (o mapa aparece no buraco de 96x96 no meio)."""
-    s = pygame.Surface((108, 108), pygame.SRCALPHA)
-    pygame.draw.rect(s, (10, 40, 60), s.get_rect(), border_radius=10)
-    pygame.draw.rect(s, (255, 255, 255), s.get_rect(), 3, border_radius=10)
-    pygame.draw.rect(s, (0, 0, 0, 0), (6, 6, 96, 96))
-    pygame.draw.rect(s, (90, 205, 95), (5, 5, 98, 98), 1)
-    return s
-
-
 def make_compass_arrow():
     s = pygame.Surface((32, 32), pygame.SRCALPHA)
     pts = [(16, 1), (27, 16), (20, 16), (20, 28), (12, 28), (12, 16), (5, 16)]
@@ -905,7 +895,6 @@ SIMPLE = {
     "menu_painel.png": make_menu_panel,
     "botao.png": lambda: make_button(False),
     "botao_selecionado.png": lambda: make_button(True),
-    "minimapa.png": make_minimap_frame,
 }
 GROUPS = {"barco.json": (BOAT_FILES + (BOAT_EXTRA if os.path.exists(os.path.join(ASSETS_DIR, BOAT_SVG)) else []),
                          boat_frames)}
