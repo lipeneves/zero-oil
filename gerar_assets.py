@@ -13,7 +13,7 @@ padrao, de duas formas:
 Uso:
   python gerar_assets.py           gera so os arquivos que faltam
   python gerar_assets.py --todos   recria tudo (sobrescreve a sua arte!)
-  python gerar_assets.py --barco-svg  recria os quadros do barco a partir do boat2.svg
+  python gerar_assets.py --barco-svg  recria os quadros do barco a partir do barco-cartoon.svg
   python gerar_assets.py --agua    recria so as texturas da agua
 """
 import json
@@ -558,11 +558,14 @@ def boat_frames():
     save_group(BOAT_FILES, frames, proj(0.0, 0.0)[:2], "barco.json")
 
 
-# --- barco a partir do boat2.svg (arte vetorizada) -------------------------------
-BOAT_SVG = "boat2.svg"
+# --- barco a partir do barco-cartoon.svg (arte vetorizada) -----------------------
+BOAT_SVG = "barco-cartoon.svg"
 BOAT_SVG_TOP = 2  # margem em cima do quadro (px)
 BOAT_SVG_SIZE, BOAT_SVG_ANCHOR = (260, 340), (130.0, 102.7)  # quadro e apoio no barco.json
-BOAT_SVG_STERN = 458.0  # linha da popa no boat2.svg (onde a esteira comeca)
+BOAT_SVG_STERN = 458.0  # linha da popa no desenho (onde a esteira comeca)
+# o barco e desenhado nesta area (unidades do SVG); a esteira na agua usa o resto
+BOAT_SVG_CANVAS = (586.828, 853.758)
+BOAT_SVG_FIT = (0.92, 184.4, 89.9)  # escala e deslocamento (x, y) do barco-cartoon.svg dentro da area
 
 
 def _wake_svg(phase, width, height):
@@ -651,189 +654,44 @@ def _wake_svg(phase, width, height):
     return "\n        ".join(out)
 
 
-BOW_ROOT = 20.0           # no boat2.svg: a raiz do braco fica no alto do trilho, acima da esteira
-BOW_REACH = (44.0, 34.0)  # quanto cada braco do V vai para o lado e para a frente
-BOW_ARM = 14.0            # grossura do braco
-BOW_STEEL = "#8a8f96"     # aco (cor solida)
-BOW_YELLOW = "#d9b44f"    # faixa de seguranca na borda de dentro
-
-
-def _remove_old_v(svg):
-    """Tira os bracos do V do desenho original (as partes da classe cls-11
-    que sobem acima de y=30); o gerador desenha bracos novos (_bow_arms_svg)."""
-    import re
-
-    def high(m):
-        nums = [float(v) for v in re.findall(r"-?[\d.]+", m.group(1))]
-        return "" if min(nums[1::2]) < 30 else m.group(0)
-    return re.sub(r'\s*<path d="([^"]*)" class="cls-11"/>', high, svg)
-
-
-def _bow_water_svg(arms, belt_top, phase):
-    """Agua na frente do barco andando, em duas camadas (por baixo e por
-    cima dos bracos do V). 'phase' (0..1) anda um passo da animacao: os 4
-    quadros fecham o loop sem pulo.
-    - por baixo: a onda de proa que se abre por fora de cada braco, as
-      ondinhas em V entrando na boca e a espuma onde a agua chega na esteira;
-    - por cima: a agua batendo na ponta de cada braco (meia-lua de espuma e
-      gotas espirrando para a frente e para fora)."""
-    under, over = [], []
-    foam = 'fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round"'
-
-    def lerp(a, b, t):
-        return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
-
-    (lx, ly), (rx, _) = belt_top
-    cx = (lx + rx) / 2
-    tips = {}
-    for side, ri, ti, to, ro, ux, uy, nx, ny, gid in arms:
-        tip = lerp(ti, to, 0.5)
-        tips[side] = (ti, to, tip, ux, uy, nx, ny)
-        # onda de proa: espuma que sai da quina de fora da ponta e se abre para tras e para fora
-        bx, by = side * 0.8, 0.6  # direcao: para fora e para tras (abre em diagonal, como onda de proa)
-        bl = math.hypot(bx, by)
-        bx, by = bx / bl, by / bl
-        start = (to[0] + nx * 2, to[1] + ny * 2)
-        for k in range(5):
-            s0 = (k + phase) / 5
-            s1 = s0 + 0.12
-            a = (start[0] + bx * 60 * s0, start[1] + by * 60 * s0)
-            b = (start[0] + bx * 60 * s1, start[1] + by * 60 * s1)
-            under.append('<path d="M%.2f %.2f L%.2f %.2f" %s stroke-opacity="%.2f" stroke-width="%.1f"/>'
-                         % (a[0], a[1], b[0], b[1], foam, 0.9 * (1 - s0) ** 1.2, 3.8 - 2.2 * s0))
-        # meia-lua de espuma na frente da ponta (a agua batendo), por cima do braco
-        r = 10.5 + 1.5 * math.sin(math.tau * phase)
-        fx, fy = tip[0] + ux * 3, tip[1] + uy * 3
-        ang = math.atan2(uy, ux)  # para a frente, na direcao do braco
-        pts = [(fx + r * math.cos(ang + d), fy + r * math.sin(ang + d))
-               for d in [math.radians(v) for v in range(-80, 81, 20)]]
-        inner = [(fx + (r - 3.2) * math.cos(ang + d) + ux * 1.5, fy + (r - 3.2) * math.sin(ang + d) + uy * 1.5)
-                 for d in [math.radians(v) for v in range(80, -81, -20)]]
-        over.append('<path d="M%s Z" fill="#ffffff" fill-opacity="0.85"/>'
-                    % " L".join("%.2f %.2f" % q for q in pts + inner))
-        # gotas espirrando para a frente e para fora, sumindo
-        for j in range(3):
-            u = (j + phase) / 3
-            d = math.radians(-35 + 35 * j) * -side  # leque para fora
-            dxj = ux * math.cos(d) - uy * math.sin(d)
-            dyj = ux * math.sin(d) + uy * math.cos(d)
-            dist = r + 3 + 14 * u
-            over.append('<circle cx="%.2f" cy="%.2f" r="%.2f" fill="#ffffff" fill-opacity="%.2f"/>'
-                        % (fx + dxj * dist, fy + dyj * dist, 3.0 - 1.6 * u, 0.9 * (1 - u)))
-    # ondinhas em V entrando pela boca, andando das pontas ate a esteira
-    tl, tr = tips[-1][0], tips[1][0]
-    for k in range(3):
-        t = (k + phase) / 3
-        y = tl[1] + 6 + (ly - tl[1] - 4) * t
-        hw = ((tr[0] - tl[0]) / 2 - 6) * (1 - t) + ((rx - lx) / 2 - 4) * t
-        under.append('<path d="M%.2f %.2f Q%.2f %.2f %.2f %.2f Q%.2f %.2f %.2f %.2f" %s stroke-opacity="%.2f" stroke-width="2.2"/>'
-                     % (cx - hw, y - 3, cx - hw / 2, y + 4, cx, y + 5, cx + hw / 2, y + 4, cx + hw, y - 3,
-                        foam, 0.55 * math.sin(math.pi * t)))
-    # espuma onde a agua chega na esteira
-    wave = [(lx + 2 + (rx - lx - 4) * i / 10,
-             ly + 1.5 + 1.8 * math.sin(i * 1.9 + math.tau * phase)) for i in range(11)]
-    under.append('<path d="M%s" %s stroke-opacity="0.7" stroke-width="3.2"/>'
-                 % (" L".join("%.2f %.2f" % q for q in wave), foam))
-    return under, over
-
-
-def _bow_arms_svg(belt, phase=None):
-    """Os dois bracos do V na frente da esteira coletora, que guiam o oleo
-    para ela: aco em cor solida, faixa amarela com listras na borda de dentro e
-    sombra na agua. Com phase (andando), poe a agua em volta (_bow_water_svg)."""
-    (bx0, by0, bx1, by1), pts = belt
-    top = sorted((q for q in pts if q[1] < (by0 + by1) / 2), key=lambda q: q[0])
-    arms = []
-    for side, (rx, ry) in ((-1, top[0]), (1, top[-1])):
-        ri = (rx, ry - BOW_ROOT)                                            # raiz, lado de dentro
-        ti = (rx + side * BOW_REACH[0], ry - BOW_REACH[1])                  # ponta, lado de dentro
-        dx, dy = ti[0] - ri[0], ti[1] - ri[1]
-        ln = math.hypot(dx, dy)
-        ux, uy = dx / ln, dy / ln
-        nx, ny = (-uy, ux) if -uy * side > 0 else (uy, -ux)               # normal para fora
-        ro = (ri[0] + nx * BOW_ARM, ri[1] + ny * BOW_ARM)
-        to = (ti[0] + nx * BOW_ARM, ti[1] + ny * BOW_ARM)
-        gid = None
-        arms.append((side, ri, ti, to, ro, ux, uy, nx, ny, gid))
-    out = []
-
-    def poly(q, attrs):
-        return '<path d="M%s Z" %s/>' % (" L".join("%.2f %.2f" % v for v in q), attrs)
-
-    for side, ri, ti, to, ro, ux, uy, nx, ny, gid in arms:  # sombra na agua
-        out.append(poly([(x + 5, y + 7) for x, y in (ri, ti, to, ro)], 'fill="#000000" fill-opacity="0.22"'))
-    under, over = _bow_water_svg(arms, (top[0], top[-1]), phase) if phase is not None else ([], [])
-    out += under
-    for side, ri, ti, to, ro, ux, uy, nx, ny, gid in arms:
-        out.append(poly((ri, ti, to, ro), 'fill="%s" stroke="#000000" stroke-width="2" stroke-linejoin="round"' % BOW_STEEL))
-        w = 3.6  # faixa amarela na borda de dentro, com listras pretas
-        si, so = (ri, ti), ((ri[0] + nx * w, ri[1] + ny * w), (ti[0] + nx * w, ti[1] + ny * w))
-        out.append(poly((si[0], si[1], so[1], so[0]), 'fill="%s"' % BOW_YELLOW))
-        for k in range(1, 6):
-            t0, t1 = k / 6 - 0.035, k / 6 + 0.02
-            a = (ri[0] + (ti[0] - ri[0]) * t0, ri[1] + (ti[1] - ri[1]) * t0)
-            b = (ri[0] + (ti[0] - ri[0]) * t1 + nx * w, ri[1] + (ti[1] - ri[1]) * t1 + ny * w)
-            out.append('<path d="M%.2f %.2f L%.2f %.2f" stroke="#1c1c22" stroke-width="2.2"/>' % (a[0], a[1], b[0], b[1]))
-        out.append(poly((ri, ti, to, ro), 'fill="none" stroke="#000000" stroke-width="2" stroke-linejoin="round"'))
-    out += over
-    return "\n      ".join(out)
-
-
-# cores do boat2.svg trocadas por tons menos saturados (antigo -> novo)
-BOAT_COLORS = {
-    "cc3926": "b4553f",  # vermelho da popa
-    "787e88": "848a93",  # casco
-    "606670": "6b7179",  # convés
-    "3c9646": "5b8d63",  # cacamba
-    "1e4623": "2f4a36",  # fundo da cacamba
-    "cacacd": "c8c6c1",  # base da cabine
-    "eeeef2": "f2efe8",  # cabine (branco quente)
-    "50505a": "50545c",  # haste da luz
-    "284b7d": "42607e",  # janela
-    "748080": "7f8687",  # trilhos e faixas
-    "606771": "636972",  # esteira
-}
 BOAT_OUTLINE = "#20242b"  # contorno (grafite, no lugar do preto puro)
 
 
-def _restyle(svg):
-    """Cores mais suaves no barco: tons menos saturados e contorno grafite.
-    Cada peca continua com uma cor solida (sem degrade), como a agua."""
+def _fit_boat_svg(svg):
+    """Poe o desenho do barco-cartoon.svg na area BOAT_SVG_CANVAS (escala e
+    desloca os pontos de cada path), deixando espaco para a esteira atras."""
     import re
-    for old, new in BOAT_COLORS.items():
-        svg = re.sub("#" + old, "#" + new, svg, flags=re.I)
-    svg = svg.replace("#000000", BOAT_OUTLINE)
-    return svg
+    s, dx, dy = BOAT_SVG_FIT
+    k = [0]
+
+    def num(m):
+        v = float(m.group(0))
+        k[0] += 1
+        return "%.2f" % (v * s + (dx if k[0] % 2 else dy))
+
+    def path(m):
+        k[0] = 0
+        return 'd="%s"' % re.sub(r"-?[\d.]+", num, m.group(1))
+    svg = re.sub(r'(?<![\w-])d="([^"]*)"', path, svg)
+    svg = re.sub(r"stroke-width:([\d.]+)", lambda m: "stroke-width:%.2f" % (float(m.group(1)) * s), svg)
+    return re.sub(r'viewBox="[^"]*"', 'viewBox="0 0 %g %g"' % BOAT_SVG_CANVAS, svg, count=1)
 
 
-def boat_svg_text(phase=None, belt=0.0):
-    """O boat2.svg sem o fundo azul e sem a esteira desenhada nele; se phase
-    (0..1) for dado, poe por baixo do barco a esteira animada (_wake_svg).
-    belt (0..1): quanto as faixas da esteira coletora ja andaram."""
+def boat_svg_text(phase=None):
+    """O barco-cartoon.svg na area do quadro, com a luz apagada e o contorno
+    grafite; se phase (0..1) for dado, poe por baixo do barco a esteira
+    animada na agua (_wake_svg)."""
     import re
     with open(os.path.join(ASSETS_DIR, BOAT_SVG), encoding="utf-8") as fp:
-        svg = fp.read()
-    width, height = map(float, re.search(r'viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)', svg).groups())
-    svg = re.sub(r'\s*<path d="[^"]*" class="cls-1(3)?"/>', "", svg)  # tira fundo, linhas e bolhas
-    svg = _remove_old_v(svg)
-
-    def bar(m):  # faixas fixas da esteira coletora (o gerador desenha as que andam)
-        nums = [float(v) for v in re.findall(r"-?[\d.]+", m.group(1))]
-        ys, xs = nums[1::2], nums[0::2]
-        return "" if 60 < min(ys) and max(ys) < 140 and max(xs) - min(xs) > 60 else m.group(0)
-    svg = re.sub(r'\s*<path d="([^"]*)" class="cls-11"/>', bar, svg)
-    belt_path = re.search(r'<path d="[^"]*" class="cls-12"/>', svg).group(0)
-    belt_shape = _svg_shape(svg, "cls-12")
-    svg = svg.replace(belt_path, belt_path + "\n      " + _belt_svg(belt_shape, belt)
-                      + "\n      " + _bow_arms_svg(belt_shape, phase))
-    for _ in range(2):  # grupos que ficaram vazios (tambem os de dentro de outro)
-        svg = re.sub(r'\s*<g>\s*</g>', "", svg)
-    # a luz em cima da cabine (o circulo vermelho) fica apagada; o jogo a acende piscando
-    svg = re.sub(r'(<path d="[^"]*C[^"]*") class="cls-2"/>', r'\1 fill="#%02x%02x%02x"/>' % LIGHT_OFF, svg)
-    svg = _restyle(svg)
+        svg = _fit_boat_svg(fp.read())
+    width, height = BOAT_SVG_CANVAS
+    # a luz em cima da cabine fica apagada; o jogo a acende piscando
+    svg = re.sub(r'(<path id="luz" d="[^"]*") class="[^"]*"/>',
+                 r'\g<1> fill="#%02x%02x%02x" stroke="#000000" stroke-width="3.7"/>' % LIGHT_OFF, svg)
+    svg = svg.replace("#000000", BOAT_OUTLINE)
     if phase is None:
         return svg
-    first = svg.index("<path", svg.index('data-name="Asset 1"'))
+    first = svg.index("<path", svg.index("<g id="))
     return svg[:first] + "<g>\n        " + _wake_svg(phase, width, height) + "\n      </g>\n      " + svg[first:]
 
 
@@ -843,51 +701,41 @@ def _svg_layer(svg, body):
     return head + "\n" + body + "\n</svg>\n"
 
 
-def _svg_shape(svg, cls, curved=None):
-    """Caixa (x0, y0, x1, y1) e pontos do primeiro path da classe 'cls'
-    (curved=True/False: so os paths com/sem curvas, como o circulo da luz)."""
+def _svg_shape(svg, ident):
+    """Caixa (x0, y0, x1, y1) e pontos do path com id 'ident' (no SVG ja
+    encaixado no quadro)."""
     import re
-    for d in re.findall(r'<path d="([^"]*)" class="%s"/>' % cls, svg):
-        if curved is not None and curved != ("C" in d):
-            continue
-        nums = [float(v) for v in re.findall(r"-?[\d.]+", d)]
-        pts = list(zip(nums[0::2], nums[1::2]))
-        xs, ys = [q[0] for q in pts], [q[1] for q in pts]
-        return (min(xs), min(ys), max(xs), max(ys)), pts
-    raise ValueError("forma %s nao achada no %s" % (cls, BOAT_SVG))
+    m = re.search(r'<path id="%s" d="([^"]*)"' % ident, svg)
+    if not m:
+        raise ValueError('forma id="%s" nao achada no %s' % (ident, BOAT_SVG))
+    nums = [float(v) for v in re.findall(r"-?[\d.]+", m.group(1))]
+    pts = list(zip(nums[0::2], nums[1::2]))
+    xs, ys = [q[0] for q in pts], [q[1] for q in pts]
+    return (min(xs), min(ys), max(xs), max(ys)), pts
 
 
-def _belt_svg(belt, shift):
-    """Faixas da esteira coletora, descendo para a cacamba: 'shift' (0..1)
-    anda um espaco entre faixas (4 quadros = 1 volta, sem pulo)."""
-    (bx0, by0, bx1, by1), pts = belt
-    top = sorted((q for q in pts if q[1] < (by0 + by1) / 2), key=lambda q: q[0])
-    bot = sorted((q for q in pts if q[1] >= (by0 + by1) / 2), key=lambda q: q[0])
-    n = int((BUCKET_TOP_Y - BELT_BAR_H - by0) // BELT_GAP)
-    out = []
-    for k in range(n):
-        y = by0 + ((k + shift) * BELT_GAP) % (n * BELT_GAP)
-        t = (y - by0) / (by1 - by0)
-        xl = top[0][0] + (bot[0][0] - top[0][0]) * t
-        xr = top[-1][0] + (bot[-1][0] - top[-1][0]) * t
-        out.append('<path d="M%.2f %.2f L%.2f %.2f L%.2f %.2f L%.2f %.2f Z" class="cls-11"/>'
-                   % (xl, y, xr, y, xr, y + BELT_BAR_H, xl, y + BELT_BAR_H))
-    return "\n      ".join(out)
-
-
-def _bucket_svg(inner, level, levels):
-    """Oleo dentro da cacamba (vista de cima): sobe do fundo (perto da cabine)
-    para a proa conforme o nivel, com a superficie ondulada. Cor solida."""
+def _bucket_svg(inner, wall, level, levels):
+    """Oleo no bau aberto de tras, enchendo como um bau de verdade. Pela boca
+    ('inner') se ve o fundo e, em cima, a parede de dentro do lado da cabine
+    ('wall'; a altura dela na tela e a altura do bau). O oleo primeiro cobre
+    o fundo e depois sobe: a superficie vai subindo pela parede ate a borda.
+    Superficie com borda ondulada, brilho e cor solida."""
     x0, y0, x1, y1 = inner
-    xl, xr, yb = x0 + 3, x1 - 3, y1 - 3
-    yt = yb - (yb - y0 - 3) * level / levels
-    r = min(9.0, yb - yt)
+    _, wy0, _, wy1 = wall
+    xl, xr, yb = x0 + 2, x1 - 2, y1 - 2
+    top = wy1 - (wy1 - wy0 - 3) * level / levels      # a superficie sobe pela parede
+    r = 7.0
     n = 12
-    wave = [(xl + (xr - xl) * i / n, yt + 2.2 * math.sin(i * 1.7 + level)) for i in range(n + 1)]
+    wave = [(xl + (xr - xl) * i / n, top + 1.8 * math.sin(i * 1.7 + level)) for i in range(n + 1)]
     edge = " L".join("%.2f %.2f" % q for q in wave)
     body = ('M%s L%.2f %.2f Q%.2f %.2f %.2f %.2f L%.2f %.2f Q%.2f %.2f %.2f %.2f Z'
             % (edge, xr, yb - r, xr, yb, xr - r, yb, xl + r, yb, xl, yb, xl, yb - r))
-    out = ['<path d="%s" fill="%s"/>' % (body, OIL_SVG)]
+    out = ['<path d="%s" fill="%s"/>' % (body, OIL_SVG),
+           '<path d="M%s" fill="none" stroke="%s" stroke-width="2.5" stroke-linecap="round"/>' % (edge, OIL_SHINE),
+           '<path d="M%.2f %.2f L%.2f %.2f M%.2f %.2f L%.2f %.2f" fill="none" stroke="%s" stroke-width="3" '
+           'stroke-linecap="round" stroke-opacity="0.8"/>'                 # reflexos na superficie
+           % (xl + 10, top + 9, xl + (xr - xl) * 0.4, top + 9,
+              xl + (xr - xl) * 0.55, top + 20, xl + (xr - xl) * 0.7, top + 20, OIL_SHINE)]
     return "\n      ".join(out)
 
 
@@ -904,34 +752,28 @@ def _light_svg(light):
             % (cx, cy, r * 3.2, cx, cy, r * 3.2, cx, cy, r, cx - r * 0.2, cy - r * 0.2, r * 0.45))
 
 
-BELT_GAP, BELT_BAR_H = 14.5, 3.0  # no boat2.svg: espaco entre as faixas da esteira e altura de cada uma
 OIL_SVG = "#2b2733"  # oleo (cor solida)
+OIL_SHINE = "#6a6280"  # brilho na superficie do oleo
 LIGHT_OFF = (98, 38, 32)  # luz apagada (nos quadros)
-BUCKET_TOP_Y = 145.0       # no boat2.svg: onde a esteira encontra a cacamba
 BUCKET_LEVELS = 8
 BOAT_EXTRA = ["cacamba_%d.png" % (i + 1) for i in range(BUCKET_LEVELS)] + ["luz_acesa.png", "gota_oleo.png"]
 
 
 def boat_svg_frames():
-    """Cria os quadros do barco (boat2_*.svg e barco_*.png) a partir do
-    boat2.svg: parado, no ar (o mesmo desenho) e andando (com a esteira na
-    agua e a esteira coletora rodando). Tambem cria as camadas que o jogo
-    poe por cima: oleo na cacamba (cacamba_N), luz acesa e a gota que desce
-    a esteira."""
+    """Cria os quadros do barco (barco_*.svg e barco_*.png) a partir do
+    barco-cartoon.svg: parado, no ar (o mesmo desenho) e andando (com a
+    esteira na agua). Tambem cria as camadas que o jogo poe por cima: oleo
+    enchendo o bau de tras (cacamba_N; no SVG, id="cacamba" e a boca do bau
+    e id="cacamba_parede" a parede de dentro que aparece), luz acesa
+    (id="luz") e a gota de oleo."""
     import io
-    import re
     fw, fh = BOAT_SVG_SIZE
     ax = BOAT_SVG_ANCHOR[0]
     boat = boat_svg_text()
-    with open(os.path.join(ASSETS_DIR, BOAT_SVG), encoding="utf-8") as fp:
-        original = fp.read()
-    width, height = map(float, re.search(r'viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)', boat).groups())
+    width, height = BOAT_SVG_CANVAS
     k = (fh - 2 * BOAT_SVG_TOP) / height  # o desenho todo cabe na altura
     sw, sh = round(width * k), round(height * k)
     ox = round(ax - sw / 2)  # centrado no apoio
-
-    def to_frame(x, y):  # unidade do SVG -> px no quadro
-        return [round(ox + x * sw / width, 1), round(BOAT_SVG_TOP + y * sh / height, 1)]
 
     def save(text, name):  # SVG -> PNG do tamanho do quadro
         img = pygame.image.load_sized_svg(io.BytesIO(text.encode("utf-8")), (sw, sh))
@@ -941,30 +783,26 @@ def boat_svg_frames():
 
     for i, png in enumerate(BOAT_FILES):
         moving = i >= 2
-        text = boat_svg_text((i - 2) / BOAT_WAKE_FRAMES if moving else None,
-                             (i - 2) / BOAT_WAKE_FRAMES if moving else 0.0)
-        name = os.path.join(ASSETS_DIR, png.replace("barco_", "boat2_").replace(".png", ".svg"))
-        with open(name, "w", encoding="utf-8") as fp:
+        text = boat_svg_text((i - 2) / BOAT_WAKE_FRAMES if moving else None)
+        with open(os.path.join(ASSETS_DIR, png.replace(".png", ".svg")), "w", encoding="utf-8") as fp:
             fp.write(text)  # a versao vetorial de cada quadro, para editar/consultar
         save(text, png)
 
-    inner, _ = _svg_shape(original, "cls-6")
-    for lvl in range(1, BUCKET_LEVELS + 1):  # oleo enchendo a cacamba
-        save(_svg_layer(boat, _bucket_svg(inner, lvl, BUCKET_LEVELS)), BOAT_EXTRA[lvl - 1])
-    save(_svg_layer(boat, _light_svg(_svg_shape(original, "cls-2", curved=True))), "luz_acesa.png")
-    # gota de oleo que desce a esteira
+    inner, _ = _svg_shape(boat, "cacamba")
+    wall, _ = _svg_shape(boat, "cacamba_parede")
+    for lvl in range(1, BUCKET_LEVELS + 1):  # oleo enchendo o bau
+        save(_svg_layer(boat, _bucket_svg(inner, wall, lvl, BUCKET_LEVELS)), BOAT_EXTRA[lvl - 1])
+    save(_svg_layer(boat, _light_svg(_svg_shape(boat, "luz"))), "luz_acesa.png")
+    # gota de oleo (o jogo so usa se o barco.json tiver "esteira")
     drop = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 12">'
             '<ellipse cx="8" cy="6" rx="6.5" ry="4.8" fill="%s" stroke="#20242b" stroke-width="1"/></svg>' % OIL_SVG)
     pygame.image.save(pygame.image.load_sized_svg(io.BytesIO(drop.encode("utf-8")), (12, 9)),
                       os.path.join(ASSETS_DIR, "gota_oleo.png"))
 
-    (bx0, by0, bx1, by1), _ = _svg_shape(boat, "cls-12")
     meta = {"arquivos": BOAT_FILES, "tamanho": [fw, fh], "apoio": list(BOAT_SVG_ANCHOR),
-            "esteira": [to_frame((bx0 + bx1) / 2, by0 + 4), to_frame((bx0 + bx1) / 2, BUCKET_TOP_Y + 12)],
             "cacamba": BOAT_EXTRA[:BUCKET_LEVELS], "luz": "luz_acesa.png", "gota": "gota_oleo.png",
             "obs": "apoio = ponto (em px, a partir do canto de cima) onde o objeto encosta na agua; "
-                   "esteira = de onde ate onde o oleo recolhido desliza (px no quadro); "
-                   "cacamba = camadas do oleo na cacamba (vazia -> cheia); luz = camada da luz acesa (pisca)"}
+                   "cacamba = camadas do oleo no bau (vazio -> cheio); luz = camada da luz acesa (pisca)"}
     with open(os.path.join(ASSETS_DIR, "barco.json"), "w", encoding="utf-8") as fp:
         json.dump(meta, fp, indent=2, ensure_ascii=False)
 

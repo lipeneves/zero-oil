@@ -15,16 +15,6 @@
     130.0,
     102.7
   ],
-  "esteira": [
-    [
-      128.6,
-      27.1
-    ],
-    [
-      128.6,
-      63.8
-    ]
-  ],
   "cacamba": [
     "cacamba_1.png",
     "cacamba_2.png",
@@ -37,5 +27,5 @@
   ],
   "luz": "luz_acesa.png",
   "gota": "gota_oleo.png",
-  "obs": "apoio = ponto (em px, a partir do canto de cima) onde o objeto encosta na agua; esteira = de onde ate onde o oleo recolhido desliza (px no quadro); cacamba = camadas do oleo na cacamba (vazia -> cheia); luz = camada da luz acesa (pisca)"
+  "obs": "apoio = ponto (em px, a partir do canto de cima) onde o objeto encosta na agua; cacamba = camadas do oleo no bau (vazio -> cheio); luz = camada da luz acesa (pisca)"
 }

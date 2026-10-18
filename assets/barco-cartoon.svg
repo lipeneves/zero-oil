@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 237 432.138">
+  <defs>
+    <style>
+      .cls-1{fill:#e2503a;stroke:#000000;stroke-width:9;stroke-miterlimit:10}
+      .cls-2{fill:none;stroke:#ff8a6e;stroke-width:7;stroke-linecap:round}
+      .cls-3{fill:none;stroke:#b03a28;stroke-width:7;stroke-linecap:round}
+      .cls-4{fill:#f3f1ec;stroke:#000000;stroke-width:5;stroke-miterlimit:10}
+      .cls-5{fill:none;stroke:#d9dce1;stroke-width:5;stroke-linecap:round}
+      .cls-6{fill:#9aa1ab;stroke:#000000;stroke-width:6;stroke-miterlimit:10}
+      .cls-7{fill:none;stroke:#c6cbd2;stroke-width:5;stroke-linecap:round}
+      .cls-8{fill:none;stroke:#5d636d;stroke-width:3;stroke-linecap:round}
+      .cls-9{fill:#c8ccd2;stroke:#000000;stroke-width:5;stroke-miterlimit:10}
+      .cls-10{fill:#3d78b8;stroke:#000000;stroke-width:4;stroke-miterlimit:10}
+      .cls-11{fill:#fbf6e6;stroke:#000000;stroke-width:6;stroke-miterlimit:10}
+      .cls-12{fill:none;stroke:#ffffff;stroke-width:6;stroke-linecap:round}
+      .cls-13{fill:none;stroke:#e6dfc8;stroke-width:8;stroke-linecap:round}
+      .cls-14{fill:#4a4e57;stroke:#000000;stroke-width:3;stroke-miterlimit:10}
+      .cls-15{fill:#ffb02e;stroke:#000000;stroke-width:4;stroke-miterlimit:10}
+      .cls-16{fill:#d48a1c;stroke:#000000;stroke-width:5;stroke-miterlimit:10}
+      .cls-17{fill:#f5b836;stroke:#000000;stroke-width:5;stroke-miterlimit:10}
+      .cls-18{fill:none;stroke:#ffe08a;stroke-width:4;stroke-linecap:round}
+      .cls-19{fill:#8a7350;stroke:#000000;stroke-width:4;stroke-miterlimit:10}
+      .cls-20{fill:#b57d22}
+      .cls-21{fill:none;stroke:#000000;stroke-opacity:0.35;stroke-width:2}
+    </style>
+  </defs>
+  <title>barco_cartoon.svg</title>
+  <g id="Asset_15" data-name="Asset 15">
+    <g>
+      <path d="M118.5 115.024 C176.96 115.024 212.037 163.866 213.707 226.445 L213.707 376.024 C213.707 398.41 201.458 409.603 176.96 409.603 L60.04 409.603 C35.542 409.603 23.293 398.41 23.293 376.024 L23.293 226.445 C24.963 163.866 60.04 115.024 118.5 115.024 Z" class="cls-1"/>
+      <path d="M118.5 4.5 C188.5 4.5 230.5 68.5 232.5 150.5 L232.5 346.5 C232.5 375.833 217.833 390.5 188.5 390.5 L48.5 390.5 C19.167 390.5 4.5 375.833 4.5 346.5 L4.5 150.5 C6.5 68.5 48.5 4.5 118.5 4.5 Z" class="cls-1"/>
+      <path d="M16.5 338.5 L16.5 154.5 C18.5 86.5 52.5 30.5 102.5 18.5" class="cls-2"/>
+      <path d="M220.5 154.5 L220.5 338.5 C220.5 363.833 209.167 377.5 186.5 379.5" class="cls-3"/>
+      <path d="M118.5 30.5 C172.5 30.5 208.5 82.5 210.5 152.5 L210.5 340.5 C210.5 359.167 201.167 368.5 182.5 368.5 L54.5 368.5 C35.833 368.5 26.5 359.167 26.5 340.5 L26.5 152.5 C28.5 82.5 64.5 30.5 118.5 30.5 Z" class="cls-4"/>
+      <path d="M202.5 158.5 L202.5 342.5 C202.5 354.5 197.167 360.5 186.5 360.5" class="cls-5"/>
+      <g>
+        <path d="M98.5 373.138 L138.5 373.138 C144 373.138 148.5 377.638 148.5 383.138 L148.5 419.138 C148.5 424.638 144 429.138 138.5 429.138 L98.5 429.138 C93 429.138 88.5 424.638 88.5 419.138 L88.5 383.138 C88.5 377.638 93 373.138 98.5 373.138 Z" class="cls-6"/>
+        <path d="M96.5 383.138 L140.5 383.138" class="cls-7"/>
+        <path d="M102.5 413.138 L134.5 413.138 M102.5 421.138 L134.5 421.138" class="cls-8"/>
+      </g>
+      <g>
+        <path d="M68.64 104.93 L171.434 104.93 C176.145 104.93 180 108.999 180 113.973 L180 152.855 C180 157.828 176.145 161.897 171.434 161.897 L68.64 161.897 C63.929 161.897 60.074 157.828 60.074 152.855 L60.074 113.973 C60.074 108.999 63.929 104.93 68.64 104.93 Z" class="cls-9"/>
+        <path d="M88.342 129.58 L151.732 129.58 C154.088 129.58 156.015 131.457 156.015 133.751 L156.015 138.757 C156.015 141.052 154.088 142.929 151.732 142.929 L88.342 142.929 C85.986 142.929 84.059 141.052 84.059 138.757 L84.059 133.751 C84.059 131.457 85.986 129.58 88.342 129.58 Z" class="cls-10"/>
+        <path d="M72.067 23.585 L168.007 23.585 C174.603 23.585 180 28.841 180 35.265 L180 110.353 C180 116.777 174.603 122.033 168.007 122.033 L72.067 122.033 C65.471 122.033 60.074 116.777 60.074 110.353 L60.074 35.265 C60.074 28.841 65.471 23.585 72.067 23.585 Z" class="cls-11"/>
+        <path d="M70.353 33.597 L126.89 33.597" class="cls-12"/>
+        <path d="M169.721 35.265 L169.721 110.353" class="cls-13"/>
+        <path d="M117.819 59.163 L124.678 59.163 L124.678 80.419 L117.819 80.419 Z" class="cls-14"/>
+        <path id="luz" d="M113.624 54 C113.624 49.899 117.038 46.574 121.248 46.574 C125.459 46.574 128.872 49.899 128.872 54 C128.872 58.101 125.459 61.425 121.248 61.425 C117.038 61.425 113.624 58.101 113.624 54 Z" class="cls-15"/>
+      </g>
+      <path d="M52.94 255.323 L184.06 255.323 C190.07 255.323 194.987 260.771 194.987 267.43 L194.987 339.681 C194.987 346.34 190.07 351.788 184.06 351.788 L52.94 351.788 C46.93 351.788 42.013 346.34 42.013 339.681 L42.013 267.43 C42.013 260.771 46.93 255.323 52.94 255.323 Z" class="cls-16"/>
+      <path d="M57.311 157.681 L179.689 157.681 C188.103 157.681 194.987 164.719 194.987 173.321 L194.987 273.861 C194.987 282.464 188.103 289.502 179.689 289.502 L57.311 289.502 C48.897 289.502 42.013 282.464 42.013 273.861 L42.013 173.321 C42.013 164.719 48.897 157.681 57.311 157.681 Z" class="cls-17"/>
+      <path d="M54.125 163.481 L120 163.481" class="cls-18"/>
+      <path d="M188.6 173.321 L188.6 273.861" class="cls-18"/>
+      <path id="cacamba" d="M63 170.181 L174 170.181 C178.4 170.181 182 173.782 182 178.181 L182 269.181 C182 273.581 178.4 277.181 174 277.181 L63 277.181 C58.6 277.181 55 273.581 55 269.181 L55 178.181 C55 173.782 58.6 170.181 63 170.181 Z" class="cls-19"/>
+      <path id="cacamba_parede" d="M63 172.181 L174 172.181 C178.4 172.181 180 177.334 180 191.503 L180 217.264 L57 217.264 L57 191.503 C57 177.334 58.6 172.181 63 172.181 Z" class="cls-20"/>
+      <path d="M57 218.849 L180 218.849" class="cls-21"/>
+    </g>
+  </g>
+</svg>
