@@ -607,23 +607,9 @@ def _wake_svg(phase, width, height):
                        'stroke-width="3.5" stroke-linecap="round"/>'
                        % (x, y, x + side * 2, y + 30, FOAM_WHITE, 0.9 * math.sin(math.pi * t)))
 
-    # rastros: poucas faixas ciano longas e onduladas saindo da popa, abrindo um pouco e sumindo
-    y0 = BOAT_SVG_STERN
-    length = height - y0 - 20
-    for off, spread, w in ((-46, 2.2, 9), (-14, 1.6, 7), (16, 1.6, 7), (48, 2.2, 9)):
-        m = 14
-        pts = []
-        for k in range(m + 1):
-            t = k / m
-            wig = 7 * t * math.sin(math.tau * (t * 2.5 - phase) + off)
-            pts.append((cx + off * (1 + (spread - 1) * t) + wig, y0 + 20 + length * t))
-        for k in range(m):                                     # pedacos seguidos, cada vez mais apagados
-            t = k / m
-            op = 0.8 * min(1.0, (t + 0.04) / 0.12) * (1 - t) ** 1.1
-            out.append('<path d="M%.1f %.1f L%.1f %.1f" fill="none" stroke="%s" stroke-opacity="%.2f" '
-                       'stroke-width="%.1f" stroke-linecap="round"/>'
-                       % (pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], WAKE_TRAIL, op, w * (1 - 0.45 * t)))
+    # (os rastros atras da popa ficam numa camada a parte: _trail_svg)
     # espuma no motor (a helice batendo a agua)
+    y0 = BOAT_SVG_STERN
     blobs = []
     for i in range(7):
         u = i / 6
@@ -633,6 +619,42 @@ def _wake_svg(phase, width, height):
     return "\n        ".join(out)
 
 
+def _trail_svg(phase, width, height, bend):
+    """Rastros na agua atras do barco: poucas faixas ciano longas e onduladas
+    saindo da popa, abrindo um pouco e sumindo. 'bend' (graus) curva os
+    rastros: rente a popa eles seguem o barco e, mais longe, viram para o
+    lado ate apontar 'bend' graus (positivo = para a direita do quadro), como
+    o caminho que o barco fez antes de virar."""
+    cx, y0 = width / 2, BOAT_SVG_STERN
+    length = height - y0 - 20
+    b = math.radians(bend)
+    m = 24
+    # linha do meio: angulo cresce ao longo do rastro (curva) e depois segue reto
+    mid, ang = [(cx, y0 + 20)], [0.0]
+    for k in range(1, m + 1):
+        a = b * min(1.0, 1.5 * (k - 0.5) / m)
+        x, y = mid[-1]
+        mid.append((x + math.sin(a) * length / m, y + math.cos(a) * length / m))
+        ang.append(a)
+    out = []
+    for off, spread, w in ((-46, 2.2, 9), (-14, 1.6, 7), (16, 1.6, 7), (48, 2.2, 9)):
+        pts = []
+        for k in range(m + 1):
+            t = k / m
+            wig = 7 * t * math.sin(math.tau * (t * 2.5 - phase) + off)
+            side = off * (1 + (spread - 1) * t) + wig   # distancia da linha do meio (para o lado)
+            pts.append((mid[k][0] + math.cos(ang[k]) * side, mid[k][1] - math.sin(ang[k]) * side))
+        for k in range(m):                                     # pedacos seguidos, cada vez mais apagados
+            t = k / m
+            op = 0.8 * min(1.0, (t + 0.04) / 0.12) * (1 - t) ** 1.1
+            out.append('<path d="M%.1f %.1f L%.1f %.1f" fill="none" stroke="%s" stroke-opacity="%.2f" '
+                       'stroke-width="%.1f" stroke-linecap="round"/>'
+                       % (pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], WAKE_TRAIL, op, w * (1 - 0.45 * t)))
+    return "\n".join(out)
+
+
+TRAIL_BENDS = list(range(-90, 91, 15))  # curvas pre-desenhadas do rastro (graus)
+TRAIL_PAD = 70                          # margem dos lados do quadro do rastro (px), para a curva caber
 FOAM_WHITE = "#ffffff"
 FOAM_SHADE = "#8fe7ee"   # sombra ciano da espuma
 WAKE_TRAIL = "#bff6f7"   # rastros atras do barco
@@ -774,6 +796,19 @@ def boat_svg_frames():
             fp.write(text)  # a versao vetorial de cada quadro, para editar/consultar
         save(text, png)
 
+    # rastros curvados (o jogo escolhe a curva pelo quanto o barco esta virando):
+    # folha com uma linha por curva e uma coluna por quadro da animacao
+    pad, padu = TRAIL_PAD, TRAIL_PAD * width / sw
+    tw = fw + 2 * pad
+    sheet = pygame.Surface((tw * BOAT_WAKE_FRAMES, fh * len(TRAIL_BENDS)), pygame.SRCALPHA)
+    for r, bend in enumerate(TRAIL_BENDS):
+        for c in range(BOAT_WAKE_FRAMES):
+            text = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="%g 0 %g %g">\n%s\n</svg>\n'
+                    % (-padu, width + 2 * padu, height, _trail_svg(c / BOAT_WAKE_FRAMES, width, height, bend)))
+            img = pygame.image.load_sized_svg(io.BytesIO(text.encode("utf-8")), (sw + 2 * pad, sh))
+            sheet.blit(img, (c * tw + ox, r * fh + BOAT_SVG_TOP))
+    pygame.image.save(sheet, os.path.join(ASSETS_DIR, "rastro.png"))
+
     inner, _ = _svg_shape(boat, "cacamba")
     wall, _ = _svg_shape(boat, "cacamba_parede")
     for lvl in range(1, BUCKET_LEVELS + 1):  # oleo enchendo o bau
@@ -787,8 +822,11 @@ def boat_svg_frames():
 
     meta = {"arquivos": BOAT_FILES, "tamanho": [fw, fh], "apoio": list(BOAT_SVG_ANCHOR),
             "cacamba": BOAT_EXTRA[:BUCKET_LEVELS], "luz": "luz_acesa.png", "gota": "gota_oleo.png",
+            "rastro": {"arquivo": "rastro.png", "curvas": TRAIL_BENDS, "margem": TRAIL_PAD},
             "obs": "apoio = ponto (em px, a partir do canto de cima) onde o objeto encosta na agua; "
-                   "cacamba = camadas do oleo no bau (vazio -> cheio); luz = camada da luz acesa (pisca)"}
+                   "cacamba = camadas do oleo no bau (vazio -> cheio); luz = camada da luz acesa (pisca); "
+                   "rastro = folha dos rastros atras do barco andando (linha = curva em graus, "
+                   "coluna = quadro da animacao; cada quadro tem 'margem' px a mais de cada lado)"}
     with open(os.path.join(ASSETS_DIR, "barco.json"), "w", encoding="utf-8") as fp:
         json.dump(meta, fp, indent=2, ensure_ascii=False)
 

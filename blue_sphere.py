@@ -283,6 +283,13 @@ class Game:
         self.boat_bucket = [load_image(n) for n in meta.get("cacamba", [])]
         self.boat_light = load_image(meta["luz"]) if "luz" in meta else None
         self.boat_drop = load_image(meta["gota"]) if "gota" in meta and "esteira" in meta else None
+        # rastros atras do barco andando, ja curvados (linha = curva, coluna = quadro)
+        self.boat_trail = []
+        if "rastro" in meta:
+            sheet = load_image(meta["rastro"]["arquivo"])
+            rows, cols = len(meta["rastro"]["curvas"]), len(self.boat_frames) - 2
+            tw, th = sheet.get_width() // cols, sheet.get_height() // rows
+            self.boat_trail = [[sheet.subsurface((c * tw, r * th, tw, th)) for c in range(cols)] for r in range(rows)]
         # versoes do tamanho de 1 casa na textura da agua (onde sao pintadas)
         self.slicks_ground = [pygame.transform.smoothscale(m, (WATER_PPC, WATER_PPC)) for m in self.slicks]
         arrow = pygame.transform.smoothscale(self.img["seta_guia"], (int(WATER_PPC * 0.6),) * 2)
@@ -1011,6 +1018,15 @@ class Game:
         frame = self.boat_layers(frames[row])
         ax, ay = self.boat_meta["apoio"]
         tilt = math.degrees(self.heading - self.view)  # nas curvas o barco vira antes da camera
+        if row >= 2 and self.boat_trail:
+            # rastro por baixo do barco: perto da popa segue o barco e, mais longe,
+            # curva de volta para o caminho de antes (para onde a camera ainda olha)
+            bends = self.boat_meta["rastro"]["curvas"]
+            i = min(range(len(bends)), key=lambda j: abs(bends[j] - tilt))
+            pad = self.boat_meta["rastro"]["margem"]
+            img = self.boat_trail[i][row - 2].copy()
+            img.blit(frame, (pad, 0))
+            frame, ax = img, ax + pad
         if abs(tilt) > 0.3:
             # gira em volta do apoio: o ponto que encosta na agua fica no mesmo lugar
             pivot = pygame.Vector2(ax, ay)

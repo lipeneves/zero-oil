@@ -27,5 +27,24 @@
   ],
   "luz": "luz_acesa.png",
   "gota": "gota_oleo.png",
-  "obs": "apoio = ponto (em px, a partir do canto de cima) onde o objeto encosta na agua; cacamba = camadas do oleo no bau (vazio -> cheio); luz = camada da luz acesa (pisca)"
+  "rastro": {
+    "arquivo": "rastro.png",
+    "curvas": [
+      -90,
+      -75,
+      -60,
+      -45,
+      -30,
+      -15,
+      0,
+      15,
+      30,
+      45,
+      60,
+      75,
+      90
+    ],
+    "margem": 70
+  },
+  "obs": "apoio = ponto (em px, a partir do canto de cima) onde o objeto encosta na agua; cacamba = camadas do oleo no bau (vazio -> cheio); luz = camada da luz acesa (pisca); rastro = folha dos rastros atras do barco andando (linha = curva em graus, coluna = quadro da animacao; cada quadro tem 'margem' px a mais de cada lado)"
 }
