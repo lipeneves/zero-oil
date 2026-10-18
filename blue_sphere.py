@@ -1277,18 +1277,54 @@ class Game:
             scr.blit(img, img.get_rect(center=(self.ground[0], self.ground[1] - 140 - age * 45)))
 
         if self.state == "clear":
-            self.text("RIO %d LIMPO!" % self.river, self.font, (W // 2, 160), (190, 255, 160))
-            self.text("bônus +%d" % self.clear_bonus, self.small, (W // 2, 200), (255, 230, 120))
+            lines = [("RIO %d LIMPO!" % self.river, self.font, (255, 255, 255)),
+                     ("bônus +%d" % self.clear_bonus, self.small, (255, 230, 120))]
             if self.extra_life:
-                self.text("+1 BARCO!", self.small, (W // 2, 228), (150, 255, 170))
+                lines.append(("+1 BARCO!", self.small, (255, 255, 255)))
+            self.draw_banner(lines, 2.8, (72, 176, 96))
         elif self.state == "fail":
-            self.text(self.fail_msg, self.font, (W // 2, 160), (255, 120, 120))
             left = "último barco!" if self.lives == 1 else "restam %d barcos" % self.lives
-            self.text("-1 barco  ·  " + left, self.small, (W // 2, 200))
+            self.draw_banner([(self.fail_msg, self.font, (255, 255, 255)),
+                              ("-1 barco  ·  " + left, self.small, (255, 230, 120))], 1.6, (214, 72, 72))
         elif self.waiting:
             self.text("APERTE QUALQUER TECLA PARA INICIAR", self.small, (W // 2, 170))
         elif self.msg_timer > 0:
             self.text(self.message, self.font, (W // 2, 170))
+
+    def draw_banner(self, lines, length, fill):
+        """Cartao do fim de rio / batida: as linhas de texto num retangulo
+        arredondado com o contorno escuro do estilo cartoon e uma sombra embaixo.
+        Entra crescendo de leve e some no fim (length = duracao do estado).
+        fill = cor do cartao (verde no rio limpo, vermelho na batida)."""
+        key = (tuple(lines), fill)
+        card = self.text_cache.get(key)
+        if card is None:
+            imgs = [self.text_image(msg, font, color) for msg, font, color in lines]
+            pad_x, pad_y, gap, shadow = 26, 12, 2, 5
+            w = max(280, max(img.get_width() for img in imgs) + 2 * pad_x)
+            h = sum(img.get_height() for img in imgs) + gap * (len(imgs) - 1) + 2 * pad_y
+            card = pygame.Surface((w, h + shadow), pygame.SRCALPHA)
+            pygame.draw.rect(card, (32, 36, 43, 110), (0, shadow, w, h), border_radius=18)
+            pygame.draw.rect(card, fill, (0, 0, w, h), border_radius=18)
+            light = [min(255, c + 45) for c in fill]  # brilho em cima, como nos botoes cartoon
+            pygame.draw.rect(card, light, (8, 6, w - 16, 5), border_radius=3)
+            pygame.draw.rect(card, (32, 36, 43), (0, 0, w, h), 3, border_radius=18)
+            y = pad_y
+            for img in imgs:
+                card.blit(img, img.get_rect(midtop=(w // 2, y)))
+                y += img.get_height() + gap
+            self.text_cache[key] = card
+        age = length - self.state_timer
+        img = card
+        if age < 0.25:  # entra crescendo e passa um pouquinho do tamanho (sem exagero)
+            s = age / 0.25
+            scale = 0.8 + 0.2 * (1 + 2.2 * (s - 1) ** 3 + 1.2 * (s - 1) ** 2)
+            img = pygame.transform.smoothscale(card, (round(card.get_width() * scale),
+                                                      round(card.get_height() * scale)))
+        if self.state_timer < 0.3:  # some no fim
+            img = img.copy()
+            img.set_alpha(int(255 * max(0.0, self.state_timer) / 0.3))
+        self.screen.blit(img, img.get_rect(center=(W // 2, 150)))
 
     # cores do minimapa (estilo cartoon: cada coisa e uma bolinha com contorno escuro)
     MAP_COLORS = {OIL: (12, 12, 16), FISH: (255, 140, 30), BUOY: (235, 55, 55),
