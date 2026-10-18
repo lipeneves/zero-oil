@@ -15,6 +15,7 @@ Uso:
   python gerar_assets.py --todos   recria tudo (sobrescreve a sua arte!)
   python gerar_assets.py --barco-svg  recria os quadros do barco a partir do barco-cartoon.svg
   python gerar_assets.py --agua    recria so as texturas da agua
+  python gerar_assets.py --menu    recria so a arte do menu (barco, titulo e botoes)
 """
 import json
 import math
@@ -832,6 +833,146 @@ def boat_svg_frames():
         json.dump(meta, fp, indent=2, ensure_ascii=False)
 
 
+# --- menu principal --------------------------------------------------------------
+# A arte do menu foi desenhada numa tela de 1920x1080 e e reduzida para a tela do
+# jogo (MENU_K). O barco fica a esquerda; titulo e botoes num bloco a direita.
+MENU_K = bs.H / 1080
+MENU_FONT = os.path.join(ASSETS_DIR, "fonts", "Creepster-Regular.ttf")
+MENU_INK = (20, 19, 24)                                  # texto do botao selecionado
+MENU_LINE = (245, 250, 252)                              # contorno e relevo brancos
+MENU_DARK = ((62, 58, 70), (14, 13, 17))                 # preto brilhante (degrade)
+MENU_LIGHT = ((255, 255, 255), (214, 236, 248))          # branco-gelo (degrade)
+MENU_BOAT = dict(angle=0, length=520, center=(170, 215))  # barco na tela do jogo (em pe)
+MENU_TITLE_W = 240                                       # largura do titulo na tela do jogo
+MENU_FILES = ["menu_barco_%d.png" % (i + 1) for i in range(BOAT_WAKE_FRAMES)] + \
+             ["menu_titulo.png", "menu_botao.png", "menu_botao_selecionado.png"]
+
+
+def _gradient(size, top, bot):
+    s = pygame.Surface(size, pygame.SRCALPHA)
+    for y in range(size[1]):
+        t = y / max(1, size[1] - 1)
+        pygame.draw.line(s, [round(a + (b - a) * t) for a, b in zip(top, bot)], (0, y), (size[0], y))
+    return s
+
+
+def _menu_word(text, size, stroke=10, depth=12):
+    """Palavra preta brilhante com contorno e relevo brancos (estilo adesivo).
+    Devolve a imagem e a altura da linha de base nela."""
+    font = pygame.font.Font(MENU_FONT, size)
+    mask = font.render(text, True, (255, 255, 255))
+    w, h = mask.get_size()
+    pad = stroke + 2
+
+    def solid(color):
+        s = mask.copy()
+        s.fill((*color, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        return s
+
+    line = solid(MENU_LINE)
+    outline = pygame.Surface((w + 2 * pad, h + 2 * pad), pygame.SRCALPHA)
+    for r in range(stroke, 0, -1):  # a letra engordada para todos os lados (disco cheio)
+        n = max(16, round(r * 6.3))
+        for i in range(n):
+            a = i * math.tau / n
+            outline.blit(line, (pad + round(math.cos(a) * r), pad + round(math.sin(a) * r)))
+    out = pygame.Surface((w + 2 * pad, h + 2 * pad + depth), pygame.SRCALPHA)
+    for d in range(depth, -1, -1):  # relevo: o contorno repetido descendo
+        out.blit(outline, (0, d))
+    fill = _gradient((w, h), *MENU_DARK)
+    fill.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    out.blit(fill, (pad, pad))
+    shine = solid((255, 255, 255))  # brilho: so a beirada de cima das letras
+    shine.fill((255, 255, 255, 90), special_flags=pygame.BLEND_RGBA_MULT)
+    hole = mask.copy()
+    hole.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)  # so a transparencia
+    shine.blit(hole, (0, round(h * 0.05)), special_flags=pygame.BLEND_RGBA_SUB)
+    out.blit(shine, (pad, pad))
+    return out, pad + font.get_ascent()
+
+
+def make_menu_title():
+    """ZERO OIL numa linha so, na largura MENU_TITLE_W."""
+    parts = [_menu_word(t, 250) for t in ("ZERO", "OIL")]
+    base = max(b for _, b in parts)
+    w = parts[0][0].get_width() + 40 + parts[1][0].get_width()
+    h = base + max(img.get_height() - b for img, b in parts)
+    out = pygame.Surface((w, h), pygame.SRCALPHA)
+    out.blit(parts[0][0], (0, base - parts[0][1]))
+    out.blit(parts[1][0], (parts[0][0].get_width() + 40, base - parts[1][1]))
+    out = out.subsurface(out.get_bounding_rect())
+    return pygame.transform.smoothscale(out, (MENU_TITLE_W, round(out.get_height() * MENU_TITLE_W / out.get_width())))
+
+
+def make_menu_button(selected):
+    """Fundo do botao do menu (o texto e escrito pelo jogo): pilula preta com
+    contorno e relevo brancos; o selecionado e branco com contorno grafite
+    e um pouco maior."""
+    w, h = (525, 103) if selected else (480, 94)
+    stroke, depth = 7, 9
+    top, bot = MENU_LIGHT if selected else MENU_DARK
+    line = BOAT_OUTLINE_RGB if selected else MENU_LINE
+    k = 4  # desenha grande e reduz (borda suave)
+    W2, H2 = (w + 2 * stroke) * k, (h + 2 * stroke + depth) * k
+    big = pygame.Surface((W2, H2), pygame.SRCALPHA)
+    outer = pygame.Rect(0, 0, W2, (h + 2 * stroke) * k)
+    r = (h // 2 + stroke) * k
+    pygame.draw.rect(big, line, outer.move(0, depth * k), border_radius=r)  # relevo
+    pygame.draw.rect(big, line, outer, border_radius=r)                    # contorno
+    inner = pygame.Rect(stroke * k, stroke * k, w * k, h * k)
+    shape = pygame.Surface((W2, H2), pygame.SRCALPHA)
+    pygame.draw.rect(shape, (255, 255, 255), inner, border_radius=h // 2 * k)
+    fill = _gradient((W2, H2), top, bot)
+    fill.blit(shape, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(fill, (0, 0))
+    shine = pygame.Surface((W2, H2), pygame.SRCALPHA)  # faixa clara na parte de cima
+    pygame.draw.rect(shine, (255, 255, 255, 70 if selected else 22),
+                     (inner.x + h * k * 0.3, inner.y + h * k * 0.1, inner.w - h * k * 0.6, h * k * 0.28),
+                     border_radius=round(h * k * 0.14))
+    big.blit(shine, (0, 0))
+    return pygame.transform.smoothscale(big, (round(W2 / k * MENU_K), round(H2 / k * MENU_K)))
+
+
+BOAT_OUTLINE_RGB = tuple(int(BOAT_OUTLINE[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def make_menu_boat():
+    """Quadros do barco do menu: andando (MENU_BOAT: angulo, tamanho e lugar), com a cacamba cheia de
+    oleo, a espuma e o rastro (um quadro por passo da animacao). Cada quadro
+    e do tamanho da tela, com o barco ja no lugar."""
+    import io
+    width, height = BOAT_SVG_CANVAS
+    top, bottom = 30.0, BOAT_SVG_STERN + 15  # do coletor ate a popa (unidades do SVG)
+    k = MENU_BOAT["length"] * MENU_K / (bottom - top)
+    frames = []
+    for i in range(BOAT_WAKE_FRAMES):
+        phase = i / BOAT_WAKE_FRAMES
+        svg = boat_svg_text(phase)
+        first = svg.index("<path", svg.index("<g id="))
+        svg = svg[:first] + "<g>\n" + _trail_svg(phase, width, height, 0) + "\n</g>\n" + svg[first:]
+        inner, _ = _svg_shape(svg, "cacamba")
+        wall, _ = _svg_shape(svg, "cacamba_parede")
+        end = svg.rindex("</svg>")
+        svg = svg[:end] + _bucket_svg(inner, wall, BUCKET_LEVELS, BUCKET_LEVELS) + "\n" + svg[end:]
+        img = pygame.image.load_sized_svg(io.BytesIO(svg.encode("utf-8")), (round(width * k), round(height * k)))
+        # gira em volta do meio do barco e poe no lugar
+        mid = pygame.Vector2(width / 2, (top + bottom) / 2) * k
+        off = mid - pygame.Vector2(img.get_rect().center)
+        rot = pygame.transform.rotozoom(img, MENU_BOAT["angle"], 1.0)
+        c = pygame.Vector2(rot.get_rect().center) + off.rotate(-MENU_BOAT["angle"])
+        frame = pygame.Surface((bs.W, bs.H), pygame.SRCALPHA)
+        frame.blit(rot, (round(MENU_BOAT["center"][0] - c.x), round(MENU_BOAT["center"][1] - c.y)))
+        frames.append(frame)
+    return frames
+
+
+def menu_frames():
+    """Cria toda a arte do menu (MENU_FILES)."""
+    imgs = make_menu_boat() + [make_menu_title(), make_menu_button(False), make_menu_button(True)]
+    for name, img in zip(MENU_FILES, imgs):
+        pygame.image.save(img, os.path.join(ASSETS_DIR, name))
+
+
 def load_or(names, maker):
     path = os.path.join(ASSETS_DIR, names[0])
     return pygame.image.load(path) if os.path.exists(path) else maker()
@@ -870,11 +1011,12 @@ SIMPLE = {
 }
 GROUPS = {"barco.json": (BOAT_FILES + (BOAT_EXTRA if os.path.exists(os.path.join(ASSETS_DIR, BOAT_SVG)) else []),
                          boat_frames)}
+MENU = (MENU_FILES, menu_frames)  # precisa do barco-cartoon.svg e da fonte Creepster
 WATER = ("agua_limpa.png", "agua_poluida.png")
 
 
 def missing():
-    names = list(SIMPLE) + list(WATER) + [n for js, (files, _) in GROUPS.items() for n in files + [js]]
+    names = list(SIMPLE) + list(WATER) + [n for js, (files, _) in GROUPS.items() for n in files + [js]] + MENU[0]
     return [n for n in names if not os.path.exists(os.path.join(ASSETS_DIR, n))]
 
 
@@ -898,14 +1040,19 @@ def generate(force=False, log=print):
         if any(need(n) for n in files + [js]):
             maker()
             log("  " + ", ".join(files + [js]))
+    if any(need(n) for n in MENU[0]):  # depois do barco (o menu usa os desenhos dele)
+        MENU[1]()
+        log("  " + ", ".join(MENU[0]))
 
 
 if __name__ == "__main__":
     pygame.init()
     print("Gerando assets em", ASSETS_DIR)
-    if "--barco-svg" in sys.argv or "--agua" in sys.argv:
+    if "--barco-svg" in sys.argv or "--agua" in sys.argv or "--menu" in sys.argv:
         if "--barco-svg" in sys.argv:
             boat_svg_frames()
+        if "--barco-svg" in sys.argv or "--menu" in sys.argv:
+            menu_frames()  # o barco do menu e feito do mesmo desenho
         if "--agua" in sys.argv:
             for name, img in zip(WATER, make_water(bs.WATER_PPC, bs.WATER_PERIOD)):
                 pygame.image.save(img, os.path.join(ASSETS_DIR, name))
