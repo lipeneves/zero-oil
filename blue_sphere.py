@@ -501,6 +501,7 @@ class Game:
         self.message = ""  # o numero do rio ja aparece no topo da tela
         self.fail_msg = ""
         self.msg_timer = 0.0
+        self.waiting = True  # rio novo: o barco so sai quando apertar uma tecla
 
     @property
     def speed(self):
@@ -705,7 +706,6 @@ class Game:
                 if self.litter_left <= 0:
                     self.river_clear()
                     return
-                self.flash("ÓLEO DESCARREGADO!", 1.0)
         elif cell == BUOY:
             self.crash("BATEU NO CONE!")
             return
@@ -753,6 +753,10 @@ class Game:
             return
         if self.state != "play":
             return
+        if self.waiting:  # a tecla so libera o barco (nao vira nem pula)
+            self.waiting = False
+            self.moving = True
+            return
         if not self.moving:  # a primeira tecla so tira o barco do lugar (nao vira nem pula)
             self.moving = True
             return
@@ -781,7 +785,7 @@ class Game:
             if self.state_timer <= 0:
                 self.respawn() if self.state == "fail" else self.next_river()
             return
-        if self.state != "play":
+        if self.state != "play" or self.waiting:
             return
         self.follow_camera(dt)
         if self.turn_t >= 0:
@@ -1281,6 +1285,8 @@ class Game:
             self.text(self.fail_msg, self.font, (W // 2, 160), (255, 120, 120))
             left = "último barco!" if self.lives == 1 else "restam %d barcos" % self.lives
             self.text("-1 barco  ·  " + left, self.small, (W // 2, 200))
+        elif self.waiting:
+            self.text("APERTE QUALQUER TECLA PARA INICIAR", self.small, (W // 2, 170))
         elif self.msg_timer > 0:
             self.text(self.message, self.font, (W // 2, 170))
 
