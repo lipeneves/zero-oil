@@ -23,7 +23,7 @@ Menu: setas para cima/baixo + Enter (ou o mouse).
 
 Controles:
   Setas esquerda/direita  virar (no centro da proxima casa)
-  Seta para cima          comecar a andar
+  Qualquer tecla          comecar a andar
   Espaco                  pular
   R                       recomecar a corrida na hora
   Esc                     pausar (no menu principal: sair)
@@ -645,10 +645,11 @@ class Game:
             return
         if self.state != "play":
             return
+        if not self.moving:  # a primeira tecla so tira o barco do lugar (nao vira nem pula)
+            self.moving = True
+            return
         if ev.key in (pygame.K_LEFT, pygame.K_RIGHT):
             self.queued = -1 if ev.key == pygame.K_LEFT else 1
-        elif ev.key == pygame.K_UP:
-            self.moving = True
         elif ev.key == pygame.K_SPACE and not self.air:
             self.moving = True
             rem = self.rem_to_center()
@@ -1172,16 +1173,12 @@ class Game:
 
 
 # --- menu ---------------------------------------------------------------------
-HOWTO = [
-    ("OBJETIVO", None),
-    ("Limpe um rio atrás do outro: cada rio é mais difícil que o anterior.", "txt"),
-    ("A caçamba leva 16 manchas. Cheia, siga as setas até a estação.", "txt"),
-    ("Cada mancha recolhida solta um peixe: não passe por cima!", "txt"),
-    ("Você tem 3 barcos e ganha +1 a cada 3 rios limpos.", "txt"),
-    ("PONTOS", None),
-    ("manchas seguidas = combo  ·  caçamba cheia = x2  ·  rio rápido = bônus", "txt"),
-    ("CONTROLES", None),
-    ("← → virar   ↑ começar   Espaço pular   R recomeçar   Esc pausar", "txt"),
+# como jogar: ([teclas desenhadas], o que faz); "left"/"right"/"up"/"down" viram
+# setas, "space" a barra de espaco, e o resto e o texto escrito na tecla
+CONTROLS = [
+    (["left", "right"], "virar o barco"),
+    (["R"], "recomeçar"),
+    (["ESC"], "pausar"),
 ]
 
 
@@ -1204,8 +1201,6 @@ class App:
 
     def __init__(self, screen):
         self.screen = screen
-        self.demo = Game(screen, demo=True)  # o rio de fundo do menu
-        self.demo.msg_timer = 0
         self.game = None
         self.mode = "menu"  # menu, howto, game, pause
         self.sel = 0
@@ -1270,8 +1265,8 @@ class App:
             elif ev.type == pygame.KEYDOWN or (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1):
                 self.mode = "menu"
             return
-        if self.mode == "howto":
-            if ev.type == pygame.KEYDOWN or ev.type == pygame.MOUSEBUTTONDOWN:
+        if self.mode == "howto":  # qualquer tecla ou clique volta
+            if ev.type == pygame.KEYDOWN or (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1):
                 self.mode = "menu"
                 self.buttons = []
             return
@@ -1297,12 +1292,10 @@ class App:
     def update(self, dt):
         if self.mode == "game":
             self.game.update(dt)
-        elif self.mode in ("menu", "credits"):
+        elif self.mode in ("menu", "credits", "howto"):
             self.menu_t += dt
             if self.mode == "credits":
                 self.credits_scroll += CREDITS_SPEED * dt
-        elif self.mode == "howto":
-            self.demo.update(dt)
 
     def text(self, msg, font, center, color=(255, 255, 255)):
         img = font.render(msg, True, color)
@@ -1389,6 +1382,59 @@ class App:
         self.buttons = []  # qualquer tecla ou clique volta (ver handle_event)
         self.draw_menu_button("VOLTAR", (MENU_X, 418), True)
 
+    def draw_howto(self):
+        """Como jogar: so os controles, no visual do menu. Na coluna da direita
+        cada linha tem as teclas desenhadas e, ao lado, o que elas fazem."""
+        scr = self.screen
+        self.draw_menu_bg(title=False)
+        img = self.sticker("CONTROLES", self.menu_font_sel)
+        scr.blit(img, img.get_rect(center=(MENU_X, 62)))
+        keys_x, text_x = MENU_X - 85, MENU_X - 15  # meio das teclas, comeco do texto
+        y = 235 - (len(CONTROLS) - 1) * 28  # linhas centradas entre o titulo e o botao
+        for keys, action in CONTROLS:
+            caps = [self.keycap(k) for k in keys]
+            w = sum(c.get_width() for c in caps) + 6 * (len(caps) - 1)
+            x = keys_x - w // 2
+            for cap in caps:
+                scr.blit(cap, cap.get_rect(midleft=(x, y)))
+                x += cap.get_width() + 6
+            img = self.sticker(action, self.record_font)
+            scr.blit(img, img.get_rect(midleft=(text_x, y)))
+            y += 56
+        self.buttons = []  # qualquer tecla ou clique volta (ver handle_event)
+        self.draw_menu_button("VOLTAR", (MENU_X, 418), True)
+
+    def keycap(self, key):
+        """Desenho de uma tecla no estilo dos botoes do menu: face clara, contorno
+        escuro e relevo embaixo, com uma seta ou o texto da tecla. Guardado pronto."""
+        cache_key = ("keycap", key)
+        if cache_key not in self.sticker_cache:
+            ink, face, side = (20, 19, 24), (245, 250, 252), (160, 178, 190)
+            h, depth, line = 36, 5, 2
+            label = None
+            if key == "space":
+                w = 120
+            elif key in ("left", "right", "up", "down"):
+                w = h
+            else:
+                label = self.record_font.render(key, True, ink)
+                w = max(h, label.get_width() + 22)
+            img = pygame.Surface((w, h + depth), pygame.SRCALPHA)
+            pygame.draw.rect(img, ink, (0, 0, w, h + depth), border_radius=8)  # contorno
+            pygame.draw.rect(img, side, (line, line, w - 2 * line, h + depth - 2 * line), border_radius=6)
+            top = pygame.Rect(line, line, w - 2 * line, h - 2 * line)
+            pygame.draw.rect(img, face, top, border_radius=6)
+            cx, cy = top.center
+            if label is not None:
+                img.blit(label, label.get_rect(center=(cx, cy + 1)))
+            elif key != "space":
+                a = {"up": 0, "right": 90, "down": 180, "left": 270}[key]
+                pts = [(0, -8), (8, 5), (-8, 5)]  # triangulo apontando para cima
+                c, s_ = math.cos(math.radians(a)), math.sin(math.radians(a))
+                pygame.draw.polygon(img, ink, [(cx + px * c - py * s_, cy + px * s_ + py * c) for px, py in pts])
+            self.sticker_cache[cache_key] = img
+        return self.sticker_cache[cache_key]
+
     def build_credits(self):
         """Monta os creditos numa imagem alta (para rolar) e a mascara que
         apaga o texto suavemente no topo e na base da faixa."""
@@ -1455,22 +1501,7 @@ class App:
                 self.text("PAUSADO", self.title, (W // 2, H // 2 - 60))
                 self.draw_buttons(H // 2 + 5)
             return
-        self.demo.draw()
-        # como jogar
-        shade_ = pygame.Surface((W - 60, H - 60), pygame.SRCALPHA)
-        shade_.fill((8, 35, 60, 225))
-        scr.blit(shade_, (30, 30))
-        y = 60
-        for line, kind in HOWTO:
-            if kind is None:
-                y += 8
-                self.text(line, self.font, (W // 2, y), (255, 215, 80))
-                y += 34
-            else:
-                self.text(line, self.small, (W // 2, y))
-                y += 30
-        self.text("aperte qualquer tecla para voltar", self.small, (W // 2, H - 52), (190, 255, 160))
-
+        self.draw_howto()
 
 def main():
     pygame.init()
