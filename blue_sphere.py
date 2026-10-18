@@ -4,7 +4,7 @@ Releitura da fase especial do Sonic 3 & Knuckles: um barco limpando um rio
 poluido. O jogo so desenha imagens (pasta assets/): o chao de agua e esticado em
 faixas com perspectiva (estilo "Mode 7"), com as manchas, as setas do guia
 e o chao da estacao pintados nele; o barco e um sprite pre-renderizado e o
-resto (boias, torre...) sao imagens em pe (tudo gerado por gerar_assets.py).
+resto (boias, marcador da estacao...) sao imagens em pe (tudo gerado por gerar_assets.py).
 
 Corrida infinita: limpe um rio atras do outro; cada rio e um pouco mais
 dificil (mais oleo, cones, jatos e velocidade). A corrida acaba quando os
@@ -33,11 +33,13 @@ import math
 import os
 import random
 import sys
+import warnings
 from collections import deque
 
 import pygame
 
 W, H = 640, 480
+WINDOW_SCALE = 1   # tamanho inicial da janela em relacao a W x H
 FPS = 60
 N = 32  # tamanho do tabuleiro (as bordas se conectam)
 
@@ -80,7 +82,7 @@ MENU_BUTTON_FONT = ("Rubik-Bold.ttf", 19, 21)  # fonte dos botoes (normal, selec
 MENU_WATER_SPEED = 70   # velocidade da agua rolando no menu (px/s)
 CAM_FOLLOW = 12.0   # quao rapido a camera alcanca o barco nas curvas (maior = mais colada)
 ITEM_R = 0.4
-STATION_SCALE = 1.65  # tamanho do modelo da estacao
+POPUP_LIFT = 0.15     # altura do marcador de reciclagem acima da agua (casas), no meio da vaga
 DOCK_CLEAR = 2        # casas livres em volta da estacao (mais 3 na frente da vaga)
 LIVES_START = 3       # barcos no inicio da corrida
 BELT_TIME = 0.45      # segundos que o oleo recolhido leva para descer a esteira ate a cacamba
@@ -136,15 +138,15 @@ def generate_level(river, seed=0):
     sa, sb = (a > 0) - (a < 0), (b > 0) - (b < 0)  # direcao da largada para a estacao
     pa, pb = -sb, sa                                 # direcao lateral
     for w in (-1, 0, 1):  # 3 casas de largura
-        for k in (-1, 0):  # vaga: 2 casas de profundidade
+        for k in (-2, -1, 0):  # vaga: 3 casas de profundidade (quadrada)
             g[(C + b + sb * k + pb * w) % N][(C + a + sa * k + pa * w) % N] = DOCK
-        for k in (1, 2):   # estacao: 2 casas de profundidade, logo atras da vaga
+        for k in (1, 2):   # estacao: 2 casas logo atras da vaga (a plataforma desenhada ocupa 1,5)
             g[(C + b + sb * k + pb * w) % N][(C + a + sa * k + pa * w) % N] = STATION
     # area livre em volta da estacao (2 casas) e na frente da vaga (mais 3): nenhum
     # bloco encosta nela, para o barco nao bater em nada quando a estacao o empurra
     zone = {((C + a + sa * k + pa * w) % N, (C + b + sb * k + pb * w) % N)
             for w in range(-1 - DOCK_CLEAR, 2 + DOCK_CLEAR)
-            for k in range(-1 - DOCK_CLEAR - 3, 3 + DOCK_CLEAR)}
+            for k in range(-2 - DOCK_CLEAR - 3, 3 + DOCK_CLEAR)}
 
     def block_cells(bx, by):
         return {((bx + i) % N, (by + j) % N) for i in range(BLOCK) for j in range(BLOCK)}
@@ -223,7 +225,10 @@ ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 
 def load_image(name, size=None):
-    img = pygame.image.load(os.path.join(ASSETS_DIR, name)).convert_alpha()
+    path = os.path.join(ASSETS_DIR, name)
+    if name.endswith(".svg"):  # vetor: rasterizado ja no tamanho pedido (nitido)
+        return (pygame.image.load_sized_svg(path, size) if size else pygame.image.load(path)).convert_alpha()
+    img = pygame.image.load(path).convert_alpha()
     if size and img.get_size() != size:
         img = pygame.transform.smoothscale(img, size)
     return img
@@ -278,10 +283,20 @@ class Game:
             FISH: [load_image("peixe.png"), load_image("peixe_nadando.png")],
         }
         self.img = {n: load_image(n + ".png") for n in (
-            "feixe_luz", "onda", "sombra", "seta_guia", "painel", "bussola", "bussola_seta", "placa_contador",
-            "estacao_chao", "estacao_torre", "tanque", "minimapa", "menu_painel")}
+            "onda", "sombra", "seta_guia", "painel", "bussola", "bussola_seta",
+            "minimapa", "menu_painel")}
+        # a torre vem direto do svg, num tamanho grande para ficar nitida de perto
+        # chao da estacao: 56 px por casa, como a textura da agua (3 x 4,5 casas)
+        self.img["estacao_chao"] = load_image("estacao_chao.svg", (3 * WATER_PPC, 9 * WATER_PPC // 2))
+        # marcador da estacao: bolha verde com o simbolo de reciclagem e o contador "0/x"
+        self.img["popup_contador"] = load_image("popup_contador.svg", (240, 120))
+        self.popup_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 44)
+        self.popup_cache = {}
         self.slicks = [load_image("mancha_%d.png" % i) for i in range(1, 5)]
         self.boat_frames, self.boat_meta = load_group("barco.json")  # parado, ar, andando...
+        # contorno do barco na tela em relacao ao ponto onde ele encosta na agua (sem a espuma)
+        ax, ay = self.boat_meta["apoio"]
+        self.boat_hull = self.boat_frames[0].get_bounding_rect().move(-round(ax), -round(ay))
         # camadas por cima do barco (se a arte tiver): oleo na cacamba, luz acesa e a gota da esteira
         meta = self.boat_meta
         self.boat_bucket = [load_image(n) for n in meta.get("cacamba", [])]
@@ -336,6 +351,8 @@ class Game:
     def reset_level(self):
         self.grid = generate_level(self.river, self.seed)
         self.litter_left = self.litter_total = sum(row.count(OIL) + row.count(TRASH) for row in self.grid)
+        self.popup_cache = {}
+        self.popup_alpha = 255.0  # o marcador some quando encosta no barco
         self.load = 0
         self.belt = []  # idade (s) de cada oleo recolhido que ainda desce a esteira
         # dock_pos = casa do meio da vaga encostada na estacao; dock_side = lado da estacao
@@ -468,7 +485,7 @@ class Game:
                     queue.append(nxt)
         self.px, self.py = float(spot[0]), float(spot[1])
         x, y = int(self.px), int(self.py)
-        blocked = (BUOY, SPOUT, FISH, STATION)
+        blocked = (BUOY, SPOUT, FISH)  # a estacao nao bloqueia: o barco passa por ela
 
         def free_run(d):  # quantas casas livres em linha reta nessa direcao
             k = 0
@@ -514,7 +531,7 @@ class Game:
         self.guide_target = self.nearest_dock(x, y)
         mi = self.dir
         sx, sy = (x + DIRS[mi][0]) % N, (y + DIRS[mi][1]) % N
-        blocked = (BUOY, SPOUT, FISH, STATION)
+        blocked = (BUOY, SPOUT, FISH)  # a estacao nao bloqueia: o barco passa por ela
         if self.grid[sy][sx] in blocked:
             return
         start = (sx, sy, mi)
@@ -546,6 +563,10 @@ class Game:
             self.guide_turn = 0 if nd == mi else 1 if nd == (mi + 1) % ND else -1
         else:
             self.guide_turn = 0
+
+    def unloaded(self):
+        """Oleo do rio que ja foi descarregado na estacao."""
+        return self.litter_total - max(0, self.litter_left) - self.load
 
     def pollution(self):
         return max(0, self.litter_left) / max(1, self.litter_total)
@@ -600,18 +621,6 @@ class Game:
             if turn:
                 self.queued = 0
                 self.start_turn(turn)
-                return
-            self.check_station()
-
-    def check_station(self):
-        """A estacao nao machuca: se o barco vai entrar nela, ela empurra o
-        barco de volta (meia-volta, igual ao antigo pneu)."""
-        dx, dy = DIRS[self.dir]
-        x, y = round(self.px) % N, round(self.py) % N
-        if self.grid[(y + dy) % N][(x + dx) % N] == STATION:
-            self.start_turn(ND // 2)
-            return True
-        return False
 
     def advance(self, dist):
         while dist > 1e-9 and self.turn_t < 0 and self.state == "play":
@@ -680,8 +689,7 @@ class Game:
                 self.heading = self.turn_to
                 self.turn_t = -1.0
                 self.since_turn = 0.0
-                if not self.check_station():  # virou de frente para a estacao
-                    self.update_guide()
+                self.update_guide()
             else:
                 s = self.turn_t
                 ease = s * s * s * (s * (6 * s - 15) + 10)  # comeca e termina devagar
@@ -806,71 +814,57 @@ class Game:
             self.draw_hud()
 
     def station_parts(self, fx, fy, rx, ry):
-        """Pecas em pe da estacao: torre de reciclagem e dois tambores (todos
-        cilindros, iguais de qualquer lado), o feixe de luz e o contador."""
+        """Estacao: so o chao (pintado na agua) e, flutuando em cima do lugar
+        dela, o marcador de reciclagem com quanto oleo do rio ja foi entregue."""
         if self.dock_pos is None:
             return []
-        scr = self.screen
         side = self.dock_side
-        perp = (-side[1], side[0])
-        parts = []
+        gx = self.dock_pos[0] - side[0]  # meio da vaga (3 casas: dock_pos e as 2 de tras)
+        gy = self.dock_pos[1] - side[1]
+        ox = (gx - self.px + N / 2) % N - N / 2
+        oy = (gy - self.py + N / 2) % N - N / 2
+        l, f = ox * rx + oy * ry, ox * fx + oy * fy
+        if l * l + f * f > (LIM + 2) ** 2:  # longe demais: nao desenha
+            return []
+        p = project(surface_point(l, f, POPUP_LIFT))
+        if p is None:
+            return []
 
-        def place(a, b):  # (a casas para o lado da estacao, b para o lado) -> camera
-            gx = self.dock_pos[0] + side[0] * a + perp[0] * b
-            gy = self.dock_pos[1] + side[1] * a + perp[1] * b
-            ox = (gx - self.px + N / 2) % N - N / 2
-            oy = (gy - self.py + N / 2) % N - N / 2
-            l, f = ox * rx + oy * ry, ox * fx + oy * fy
-            if l * l + f * f > (LIM + 2) ** 2:
-                return None
-            p = project(surface_point(l, f))
-            # entre a camera e o barco (ex.: logo depois da estacao empurrar o barco),
-            # as pecas em pe cobririam a tela: nao desenha
-            return (l, f, p) if p and p[2] > PLAYER_DEPTH else None
-
-        def standing(img, a, b, width):
-            spot = place(a, b)
-            if spot is None:
-                return None
-            l, f, p = spot
-            w = max(2, round(width * FOCAL / p[2]))
-            h = max(2, round(w * img.get_height() / img.get_width()))
-            if w > W or h > 2 * H:
-                return None
-
-            def draw():
-                scr.blit(self.scaled(("pe", id(img)), img, w, h), (round(p[0] - w / 2), round(p[1] - h * 0.97)))
-            parts.append((p[2], draw))
-            return l, f, p, h
-
-        tower = standing(self.img["estacao_torre"], 1.5, 0.0, 1.0)
-        standing(self.img["tanque"], 1.9, -1.0, 0.36)
-        standing(self.img["tanque"], 1.9, 1.0, 0.36)
-        if tower is None:
-            return [(d, "fn", fn, 0, 0, 0, 0) for d, fn in parts]
-        l, f, p, th = tower
-        top_y = p[1] - th * 0.95
-
-        def beam():
-            sz = 2 * ITEM_R * FOCAL / p[2]
-            bw, bh = int(sz * 1.1), int(sz * 7)
-            scr.blit(self.scaled(("feixe",), self.img["feixe_luz"], bw, bh), (p[0] - bw / 2, top_y - bh))
-        if self.need_unload:
-            parts.append((p[2] + 0.01, beam))
-
-        def counter():
+        def popup():  # centrado no meio da vaga, subindo e descendo devagar
             size = max(10, min(32, int(0.5 * FOCAL / p[2])))
-            font = self.fonts.get(size)
-            if font is None:
-                font = self.fonts[size] = pygame.font.SysFont("arialblack,arial", size, bold=True)
-            txt = font.render(str(self.delivered), True, (60, 40, 30))
-            bw, bh = int(txt.get_width() + size * 1.9), int(size * 1.35)
-            plate = self.scaled(("placa",), self.img["placa_contador"], bw, bh)
-            rect = plate.get_rect(midbottom=(p[0], top_y - size * 0.4))
-            scr.blit(plate, rect)
-            scr.blit(txt, txt.get_rect(midright=(rect.right - size * 0.4, rect.centery)))
-        parts.append((p[2] - 0.02, counter))
-        return [(d, "fn", fn, 0, 0, 0, 0) for d, fn in parts]
+            pw = int(size * 3.6)
+            bob = math.sin(self.anim * 2.5) * size * 0.25
+            text = "%d/%d" % (self.unloaded(), self.litter_total)
+            pin = self.scaled(("popup", text), self.popup_image(text), pw, pw // 2)
+            rect = pin.get_rect(center=(p[0], p[1] + bob))
+            boat = self.boat_hull.move(round(self.ground[0]), round(self.ground[1]))
+            touching = not self.demo and rect.colliderect(boat)  # encostou no barco: some (devagar)
+            self.popup_alpha += ((0 if touching else 255) - self.popup_alpha) * 0.25
+            if self.popup_alpha < 5:
+                return
+            pin.set_alpha(round(self.popup_alpha))
+            self.screen.blit(pin, rect)
+        return [(0.0, "fn", popup, 0, 0, 0, 0)]  # profundidade 0: desenhado por ultimo, acima do barco
+
+    def popup_image(self, text):
+        """Marcador da estacao com o contador escrito em branco (com contorno)
+        no espaco a direita do simbolo."""
+        img = self.popup_cache.get(text)
+        if img is None:
+            img = self.img["popup_contador"].copy()
+            font = self.popup_font
+            txt = font.render(text, True, (255, 255, 255))
+            ink = font.render(text, True, (32, 36, 43))
+            k = min(1.0, 128 / txt.get_width())  # numeros grandes: diminui para caber
+            if k < 1:
+                size = (round(txt.get_width() * k), round(txt.get_height() * k))
+                txt, ink = pygame.transform.smoothscale(txt, size), pygame.transform.smoothscale(ink, size)
+            rect = txt.get_rect(center=(157, 49))  # x 120 a 300 do svg (320 x 160), na metade de cima
+            for dx, dy in ((-3, 0), (3, 0), (0, -3), (0, 3), (-2, -2), (2, -2), (-2, 2), (2, 2)):
+                img.blit(ink, rect.move(dx, dy))
+            img.blit(txt, rect)
+            self.popup_cache[text] = img
+        return img
 
     def draw_item(self, kind, x, y, size, cx, cy):
         scr = self.screen
@@ -941,8 +935,9 @@ class Game:
                     v = ((cx % N) * 7 + (cy % N) * 13) % len(self.slicks_ground)
                     buf.blit(self.slicks_ground[v], (x - c, y - c))
         if self.dock_pos:
+            # chao: 3 casas de vaga + 1,5 de plataforma -> o meio fica 0,25 casa para longe da estacao
             sx, sy = self.dock_side
-            x, y = at(self.dock_pos[0] + sx * 0.5, self.dock_pos[1] + sy * 0.5)
+            x, y = at(self.dock_pos[0] - sx * 0.25, self.dock_pos[1] - sy * 0.25)
             floor = self.station_floor
             buf.blit(floor, (x - floor.get_width() / 2, y - floor.get_height() / 2))
         path = self.guide
@@ -1504,8 +1499,16 @@ class App:
         self.draw_howto()
 
 def main():
+    os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "linear")  # ampliacao suave, sem serrilhado
     pygame.init()
-    screen = pygame.display.set_mode((W, H))
+    # o jogo e desenhado em W x H e o pygame amplia a janela (pode redimensionar/maximizar).
+    # O mouse e convertido sozinho.
+    screen = pygame.display.set_mode((W, H), pygame.SCALED | pygame.RESIZABLE)
+    with warnings.catch_warnings():  # from_display_module avisa que esta obsoleto, mas funciona
+        warnings.simplefilter("ignore", DeprecationWarning)
+        window = pygame.Window.from_display_module()
+    window.size = (round(W * WINDOW_SCALE), round(H * WINDOW_SCALE))
+    window.position = pygame.WINDOWPOS_CENTERED
     pygame.display.set_caption("Zero Oil")
     clock = pygame.time.Clock()
     app = App(screen)

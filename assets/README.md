@@ -39,16 +39,17 @@ Use PNG com fundo transparente. As texturas de água são a exceção.
 
 | Arquivo | O que é | Tamanho |
 |---|---|---|
-| `estacao_chao.png` | Chão da estação **visto de cima**: a plataforma em cima e a vaga de descarga embaixo | 168×224 |
-| `estacao_torre.png` | Torre de reciclagem em pé. O feixe de luz e o contador saem do topo dela | 96×200 |
-| `tanque.png` | Os dois tambores nos cantos de trás da plataforma | 32×80 |
+| `estacao_chao.svg` | Chão da estação **visto de cima** (56 unidades = 1 casa; o jogo lê o SVG direto), estilo cartoon: em cima, a sombra da plataforma de petróleo e as ondinhas das 4 colunas (o tampo e as colunas são desenhados em 3D pelo jogo, ver `DECK_*` em `blue_sphere.py`); embaixo, a vaga de descarga (3×3 casas) | 168×252 |
+| `estacao_torre.svg` | Torre de vidro redonda antiga (não usada: o tanque de vidro agora é quadrado e desenhado em 3D pelo jogo, ver `TANK_*` em `blue_sphere.py`) | 240×500 |
 
-**`estacao_chao.png`**
+**`estacao_chao.svg`**
 - **Como aparece:** é pintado na água, então ganha a perspectiva e o giro corretos de graça.
-- **Tamanho:** equivale a 3 casas de largura por 4 de profundidade, com 56 px por casa. As 2 casas de cima são a plataforma e as 2 de baixo são a vaga.
+- **Tamanho:** equivale a 3 casas de largura por 4,5 de profundidade, com 56 unidades por casa (168×252). A 1,5 casa de cima fica embaixo da plataforma e as 3 de baixo são a vaga (quadrada). Mantenha esse tamanho ao editar.
 - **Orientação:** desenhe com a estação **para cima**. O jogo gira a imagem conforme a posição da estação no mapa.
 
-**Torre e tambores:** são desenhados em pé, sempre de frente para a câmera. Por isso devem ser redondos, como cilindros, para parecerem iguais de qualquer lado.
+**Plataforma e tanque de vidro:** são desenhados em 3D pelo jogo (função `oil_rig` em `blue_sphere.py`), com o óleo entregue subindo dentro do tanque. O feixe de luz e o marcador de reciclagem (`popup_reciclagem.svg`) saem da tampa do tanque.
+
+**Arte vetorizada:** a torre (`estacao_torre.svg`), o chão (`estacao_chao.svg`) e o marcador (`popup_reciclagem.svg`) são SVGs no estilo cartoon do barco, carregados direto pelo jogo: é só editar e rodar.
 
 ## Objetos
 
@@ -77,7 +78,7 @@ Use PNG com fundo transparente. As texturas de água são a exceção.
 |---|---|
 | `painel.png` | Caixas do placar (160×46) |
 | `bussola.png`, `bussola_seta.png` | Fundo da bússola e a seta (desenhe a seta apontando para cima) |
-| `placa_contador.png` | Plaquinha do óleo entregue; é esticada na largura do número |
+| `placa_contador.png` | Plaquinha do óleo entregue (não usada no jogo por enquanto) |
 | `minimapa.png` | Moldura do minimapa (108×108); o mapa aparece no quadrado de 96×96 do meio |
 
 ## Menu

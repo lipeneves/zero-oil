@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="168" height="252" viewBox="0 0 168 252">
+  <title>estacao_chao.svg</title>
+  <!-- chao da estacao visto de cima, pintado na agua pelo jogo. 56 unidades = 1 casa:
+       3 casas de largura por 4,5 de profundidade. Em cima (y 0-84) e o lugar da estacao
+       (so agua: o jogo desenha o marcador de reciclagem flutuando ali). Embaixo
+       (y 84-252) a vaga de descarga (3 x 3 casas, quadrada). O lado de cima e o lado da estacao;
+       o jogo gira a imagem conforme a posicao dela no mapa. -->
+
+  <!-- vaga de descarga: area amarela clara com borda tracejada vermelha e branca -->
+  <rect x="6" y="90" width="156" height="156" fill="#ffe150" fill-opacity="0.22"/>
+  <rect x="6" y="90" width="156" height="156" fill="none" stroke="#fafafa" stroke-width="8"/>
+  <rect x="6" y="90" width="156" height="156" fill="none" stroke="#eb4034" stroke-width="8" stroke-dasharray="13 13"/>
+  <rect x="1.5" y="85.5" width="165" height="165" fill="none" stroke="#20242b" stroke-width="2"/>
+  <rect x="10.5" y="94.5" width="147" height="147" fill="none" stroke="#20242b" stroke-width="2"/>
+</svg>

@@ -102,20 +102,6 @@ def make_can(body=(205, 30, 40), stripe=(255, 255, 255), shine=(255, 120, 120), 
     return _rotated(s, angle)
 
 
-def make_cylinder(w, h, color, band=None):
-    """Cilindro em pe visto de lado (igual de qualquer angulo)."""
-    s = pygame.Surface((w, h), pygame.SRCALPHA)
-    for x in range(w):
-        t = x / (w - 1)
-        k = 0.65 + 0.5 * math.sin(math.pi * t) - 0.25 * t  # luz vindo da esquerda
-        pygame.draw.line(s, shade(color, k), (x, 4), (x, h - 1))
-        if band:
-            pygame.draw.line(s, shade(band, k), (x, h * 0.12), (x, h * 0.22))
-    pygame.draw.ellipse(s, shade(color, 0.55), (0, 0, w, 9))
-    pygame.draw.ellipse(s, (35, 36, 44), (w * 0.2, 2, w * 0.6, 5))
-    return s
-
-
 def make_beam():
     """Feixe de luz que marca a descarga quando a cacamba esta cheia."""
     s = pygame.Surface((32, 256), pygame.SRCALPHA)
@@ -278,91 +264,6 @@ def make_sign():
     pygame.draw.rect(s, (255, 245, 220), s.get_rect(), border_radius=20)
     pygame.draw.rect(s, (215, 95, 45), s.get_rect(), 3, border_radius=20)
     pygame.draw.circle(s, (240, 180, 40), (20, 20), 10)
-    return s
-
-
-def draw_recycle(surf, cx, cy, r, color, width):
-    """Simbolo de reciclagem: tres setas em triangulo."""
-    for i in range(3):
-        a0 = -math.pi / 2 + i * math.tau / 3
-        a1 = a0 + math.tau / 3 * 0.75
-        p0 = (cx + math.cos(a0) * r, cy + math.sin(a0) * r)
-        p1 = (cx + math.cos(a1) * r, cy + math.sin(a1) * r)
-        pygame.draw.line(surf, color, p0, p1, width)
-        ang = math.atan2(p1[1] - p0[1], p1[0] - p0[0])
-        k = width + 3
-        tip = (p1[0] + math.cos(ang) * k, p1[1] + math.sin(ang) * k)
-        pygame.draw.polygon(surf, color, [tip, (p1[0] + math.cos(ang + 2.2) * k, p1[1] + math.sin(ang + 2.2) * k),
-                                          (p1[0] + math.cos(ang - 2.2) * k, p1[1] + math.sin(ang - 2.2) * k)])
-
-
-def make_station_floor():
-    """Chao da estacao visto de cima, pintado na agua pelo jogo. Ocupa 3 casas
-    de largura por 4 de profundidade (56 px por casa): em cima, a plataforma
-    (2 casas); embaixo, a vaga de descarga (2 casas). O lado de cima e o lado
-    da estacao; o jogo gira a imagem conforme a posicao dela no mapa."""
-    c = bs.WATER_PPC
-    w, h = 3 * c, 4 * c
-    s = pygame.Surface((w, h), pygame.SRCALPHA)
-    # plataforma
-    deck = pygame.Rect(3, 3, w - 6, 2 * c - 6)
-    pygame.draw.rect(s, (95, 100, 112), deck.move(0, 4), border_radius=10)  # beirada (sombra)
-    pygame.draw.rect(s, (182, 187, 194), deck, border_radius=10)
-    for x in range(deck.x + 14, deck.right - 6, 14):  # tabuas
-        pygame.draw.line(s, (166, 171, 179), (x, deck.y + 6), (x, deck.bottom - 14), 2)
-    stripe = pygame.Rect(deck.x + 6, deck.bottom - 14, deck.w - 12, 9)  # faixa de atencao na frente
-    pygame.draw.rect(s, (35, 35, 40), stripe)
-    for x in range(stripe.x - 9, stripe.right, 12):
-        pygame.draw.polygon(s, (250, 205, 40), [(x, stripe.bottom), (x + 6, stripe.bottom),
-                                                (x + 15, stripe.y), (x + 9, stripe.y)])
-    pygame.draw.rect(s, (35, 35, 40), (deck.x, stripe.y, 6, 9))
-    pygame.draw.rect(s, (35, 35, 40), (stripe.right, stripe.y, 6, 9))
-    for x in (c // 2 + 2, w - c // 2 - 2):  # simbolos de reciclagem nos cantos da frente
-        draw_recycle(s, x, int(c * 1.25), 11, (50, 160, 70), 3)
-    pygame.draw.rect(s, (90, 205, 95), deck, 5, border_radius=10)
-    # vaga de descarga
-    zone = pygame.Rect(4, 2 * c + 4, w - 8, 2 * c - 8)
-    glow = pygame.Surface(zone.size, pygame.SRCALPHA)
-    glow.fill((255, 225, 80, 45))
-    s.blit(glow, zone)
-    pts = [zone.topleft, zone.topright, zone.bottomright, zone.bottomleft]
-    for e in range(4):
-        (x0, y0), (x1, y1) = pts[e], pts[(e + 1) % 4]
-        segs = max(4, round(math.hypot(x1 - x0, y1 - y0) / 14))
-        for k in range(segs):
-            a = (x0 + (x1 - x0) * k / segs, y0 + (y1 - y0) * k / segs)
-            b = (x0 + (x1 - x0) * (k + 1) / segs, y0 + (y1 - y0) * (k + 1) / segs)
-            pygame.draw.line(s, (225, 40, 40) if k % 2 == 0 else (250, 250, 250), a, b, 6)
-    for k in range(2):  # setas pintadas apontando para a estacao
-        y = zone.y + 18 + k * 34
-        pygame.draw.polygon(s, (255, 255, 255, 170), [(w // 2, y), (w // 2 + 18, y + 16), (w // 2 + 8, y + 16),
-                                                     (w // 2 + 8, y + 26), (w // 2 - 8, y + 26), (w // 2 - 8, y + 16),
-                                                     (w // 2 - 18, y + 16)])
-    return s
-
-
-def make_tower():
-    """Torre de reciclagem: cilindro (igual de qualquer lado), desenhada em pe."""
-    w, h = 96, 200
-    s = pygame.Surface((w, h), pygame.SRCALPHA)
-    body = (55, 150, 80)
-    top, bottom = 58, h - 6
-    for x in range(8, w - 8):  # corpo com luz vindo da esquerda
-        t = (x - 8) / (w - 17)
-        k = 0.62 + 0.55 * math.sin(math.pi * t) - 0.3 * t
-        pygame.draw.line(s, shade(body, k), (x, top), (x, bottom))
-        pygame.draw.line(s, shade((245, 245, 240), k), (x, top + 34), (x, top + 78))  # faixa branca
-        pygame.draw.line(s, shade((40, 110, 60), k), (x, bottom - 14), (x, bottom))   # base
-    pygame.draw.ellipse(s, shade(body, 0.7), (8, bottom - 8, w - 16, 14))
-    draw_recycle(s, w // 2, top + 56, 15, (50, 160, 70), 4)
-    # telhado conico
-    pygame.draw.polygon(s, (40, 110, 60), [(4, top + 4), (w - 4, top + 4), (w // 2, 14)])
-    pygame.draw.polygon(s, (75, 170, 100), [(4, top + 4), (w // 2 - 6, top + 4), (w // 2, 14)])
-    pygame.draw.ellipse(s, (35, 95, 50), (4, top - 2, w - 8, 12))
-    # luz no topo
-    pygame.draw.line(s, (80, 80, 90), (w // 2, 16), (w // 2, 4), 3)
-    pygame.draw.circle(s, (255, 225, 80), (w // 2, 6), 6)
-    pygame.draw.circle(s, (255, 250, 210), (w // 2 - 2, 4), 2)
     return s
 
 
@@ -1010,9 +911,6 @@ SIMPLE = {
     "sacola.png": make_bag,
     "lata_vermelha.png": make_can,
     "lata_prateada.png": lambda: make_can((190, 195, 205), (30, 90, 200), (240, 240, 250), (110, 115, 125), 20),
-    "tanque.png": lambda: make_cylinder(32, 80, (88, 92, 102)),
-    "estacao_chao.png": make_station_floor,
-    "estacao_torre.png": make_tower,
     "feixe_luz.png": make_beam,
     "mancha_1.png": lambda: make_slick(1),
     "mancha_2.png": lambda: make_slick(2),
