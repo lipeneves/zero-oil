@@ -392,46 +392,39 @@ def make_button(selected):
     return s
 
 
-WATER_COLORS = {  # (fundo em cor solida, reflexo fraco por cima)
-    "clean": ((46, 150, 205), (76, 172, 220)),
-    "dirty": ((84, 96, 58), (100, 113, 72)),
+WATER_COLORS = {  # (fundo, faixas claras)
+    "clean": ((74, 178, 228), (124, 205, 240)),
+    "dirty": ((84, 96, 58), (108, 122, 78)),
 }
 
 
-def _water_noise(size, rnd, kmin, kmax, waves):
-    """Ruido suave sem emendas e igual em todas as direcoes: soma de ondas
-    com direcoes sorteadas (numero inteiro de voltas por textura, para emendar)."""
-    import numpy as np
-    y, x = np.mgrid[0:size, 0:size] / size
-    n = np.zeros((size, size))
-    for _ in range(waves):
-        while True:
-            kx, ky = rnd.randint(-kmax, kmax), rnd.randint(-kmax, kmax)
-            if kmin <= math.hypot(kx, ky) <= kmax:
-                break
-        n += np.cos(math.tau * (kx * x + ky * y) + rnd.uniform(0, math.tau))
-    return n / np.abs(n).max()
-
-
 def make_water(ppc, period):
-    """Texturas de agua sem emendas (limpa e poluida): cor solida com
-    reflexos largos e fracos por cima. Nada de linha fina ou forma com
-    direcao: igual de qualquer angulo e sem tremer quando a camera gira.
-    As duas usam o mesmo desenho, para o jogo misturar uma na outra
-    conforme a poluicao."""
-    import numpy as np
+    """Texturas de agua sem emendas (limpa e poluida), estilo desenho:
+    fundo liso e faixas claras onduladas de grossura variada. As duas usam
+    o mesmo desenho, para o jogo misturar uma na outra conforme a poluicao."""
     size = ppc * period
-    rnd = random.Random(5)
-    _water_noise(size, rnd, 2, 4, 14)  # (sorteio de antes: os reflexos continuam no mesmo lugar)
-    ridge = 1 - np.abs(_water_noise(size, rnd, 3, 6, 18))      # reflexos: perto de 1 nas "linhas"
-    glow = np.clip((ridge - 0.78) / 0.22, 0, 1) ** 2 * 0.55  # largos e fracos
+    k = 2  # desenha em 2x e reduz no fim (borda suave)
     out = []
     for name in ("clean", "dirty"):
-        base, light = (np.array(c, dtype=float) for c in WATER_COLORS[name])
-        img = base + glow[..., None] * (light - base)
-        s = pygame.Surface((size, size))
-        pygame.surfarray.blit_array(s, np.clip(img, 0, 255).astype(np.uint8).transpose(1, 0, 2))
-        out.append(s)
+        base, band = WATER_COLORS[name]
+        rnd = random.Random(5)  # mesmo desenho nas duas texturas
+        s = pygame.Surface((size * k, size * k))
+        s.fill(base)
+        for i in range(4):  # faixas: ondas com numero inteiro de voltas (emendam dos lados)
+            y0 = (i + rnd.uniform(0.2, 0.8)) * size / 4
+            f1, f2 = rnd.choice((1, 2)), rnd.choice((2, 3))
+            p1, p2, p3 = rnd.uniform(0, math.tau), rnd.uniform(0, math.tau), rnd.uniform(0, math.tau)
+            top, bottom = [], []
+            for x in range(0, size + 1, 4):
+                t = math.tau * x / size
+                y = y0 + 10 * math.sin(f1 * t + p1)
+                thick = 2 + 6 * (0.5 + 0.5 * math.sin(f2 * t + p2)) + 9 * max(0.0, math.sin(t + p3)) ** 2
+                top.append((x, y))
+                bottom.append((x, y + thick))
+            pts = top + bottom[::-1]
+            for oy in (-size, 0, size):  # repete em cima e embaixo (emenda sem costura)
+                pygame.draw.polygon(s, band, [(x * k, (y + oy) * k) for x, y in pts])
+        out.append(pygame.transform.smoothscale(s, (size, size)))
     return tuple(out)
 
 
