@@ -242,11 +242,32 @@ ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 SOUND_VOLUME = {"oleo": 0.5, "menu_mover": 0.5, "jato": 0.7}
 MUSIC_VOLUME = 0.22
 sounds = {}
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+volume = {"musica": 1.0, "efeitos": 1.0}  # niveis da tela OPÇÕES (0 a 1), por cima dos volumes acima
+
+
+def load_config():
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as fp:
+            cfg = json.load(fp)
+        for key in volume:
+            volume[key] = min(1.0, max(0.0, float(cfg.get(key, volume[key]))))
+    except (OSError, ValueError, AttributeError):
+        pass
+
+
+def save_config():
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as fp:
+            json.dump(volume, fp)
+    except OSError:
+        pass
 
 
 def init_sounds():
     """Liga o audio e carrega os efeitos. Sem placa de som (ou sem os arquivos)
     o jogo segue mudo, sem erro."""
+    load_config()
     try:
         pygame.mixer.init()
         pygame.mixer.set_num_channels(16)
@@ -263,7 +284,7 @@ def init_sounds():
                 pass
     try:
         pygame.mixer.music.load(os.path.join(folder, "musica.ogg"))
-        pygame.mixer.music.set_volume(MUSIC_VOLUME)
+        pygame.mixer.music.set_volume(MUSIC_VOLUME * volume["musica"])
         pygame.mixer.music.play(-1)  # musica de fundo em loop, no menu e no jogo
     except pygame.error:
         pass
@@ -271,13 +292,15 @@ def init_sounds():
 
 def play(name):
     if name in sounds:
-        sounds[name].play()
+        channel = sounds[name].play()
+        if channel:
+            channel.set_volume(volume["efeitos"])
 
 
 def music_volume(k):
     """Abaixa a musica (k < 1) na pausa e no fim de jogo; 1 volta ao normal."""
     if pygame.mixer.get_init():
-        pygame.mixer.music.set_volume(MUSIC_VOLUME * k)
+        pygame.mixer.music.set_volume(MUSIC_VOLUME * k * volume["musica"])
 
 
 def load_image(name, size=None):
@@ -405,10 +428,12 @@ class Game:
         self.screen = screen
         self.demo = demo  # fundo do menu: camera girando devagar, sem placar
         self.paused = False  # o menu de pausa esta por cima (esconde o aviso do centro)
+        self.show_hud = True  # False: desenha so o rio (a tela OPCOES poe o titulo no lugar do placar)
         # textos do jogo: mesma fonte e contorno do marcador de reciclagem (estilo cartoon)
         rubik = os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf")
         self.font = pygame.font.Font(rubik, 34)
         self.small = pygame.font.Font(rubik, 20)
+        self.tiny = pygame.font.Font(rubik, 15)  # aviso de apertar uma tecla nos rios seguintes
         self.big = pygame.font.Font(rubik, 56)
         self.text_cache = {}
         import gerar_assets  # cria a arte padrao que ainda nao existir em assets/
@@ -968,7 +993,7 @@ class Game:
             else:
                 self.draw_item(kind, x, y, size, cx, cy)
 
-        if not self.demo:
+        if not self.demo and self.show_hud:
             self.draw_hud()
 
     def station_parts(self, fx, fy, rx, ry):
@@ -1340,7 +1365,7 @@ class Game:
             self.draw_banner([(self.fail_msg, self.popup_font, (255, 140, 130)),
                               (left, self.small, (255, 255, 255))], 1.6)
         elif self.waiting and not self.paused:
-            self.text("APERTE QUALQUER TECLA PARA INICIAR", self.small, (W // 2, 170))
+            self.text("APERTE QUALQUER TECLA PARA INICIAR", self.tiny, (W // 2, 170))
         elif self.msg_timer > 0:
             self.text(self.message, self.font, (W // 2, 170))
 
@@ -1483,13 +1508,14 @@ class Game:
 
 
 # --- menu ---------------------------------------------------------------------
-# como jogar: ([teclas desenhadas], o que faz); "left"/"right"/"up"/"down" viram
-# setas, "space" a barra de espaco, e o resto e o texto escrito na tecla
+# controles: ([teclas desenhadas], o que faz, nome curto); "left"/"right"/"up"/"down" viram
+# setas, "space" a barra de espaco, e o resto e o texto escrito na tecla. A tela OPCOES
+# usa o texto completo; a faixa do comeco da corrida, o nome curto
 CONTROLS = [
-    (["left", "right"], "virar o barco"),
-    (["space"], "pular (2x: salto duplo)"),
-    (["R"], "recomeçar"),
-    (["ESC"], "pausar"),
+    (["left", "right"], "virar o barco", "VIRAR"),
+    (["space"], "pular (2x: salto duplo)", "PULAR"),
+    (["R"], "recomeçar", "RECOMEÇAR"),
+    (["ESC"], "pausar", "PAUSAR"),
 ]
 
 
@@ -1512,16 +1538,17 @@ CREDITS_VIEW = (24, 382)  # faixa da tela (topo, base) onde os creditos rolam
 
 
 class App:
-    """Telas do jogo: menu principal, como jogar, partida e pausa."""
+    """Telas do jogo: menu principal, opções, créditos, partida, pausa e fim de jogo."""
 
-    MAIN = ["JOGAR", "COMO JOGAR", "CRÉDITOS", "SAIR"]
-    PAUSE = ["CONTINUAR", "MENU PRINCIPAL"]
+    MAIN = ["JOGAR", "OPÇÕES", "CRÉDITOS", "SAIR"]
+    PAUSE = ["CONTINUAR", "OPÇÕES", "MENU PRINCIPAL"]
+    SOUND = [("MÚSICA", "musica"), ("EFEITOS", "efeitos")]  # barras da tela OPÇÕES (+ VOLTAR)
     GAMEOVER = ["JOGAR DE NOVO", "MENU PRINCIPAL"]
 
     def __init__(self, screen):
         self.screen = screen
         self.game = None
-        self.mode = "menu"  # menu, howto, credits, game, pause, gameover
+        self.mode = "menu"  # menu, credits, sound, game, pause, gameover
         self.sel = 0
         self.buttons = []
         # menu principal: agua rolando, barco andando na diagonal, titulo e botoes a direita
@@ -1540,6 +1567,8 @@ class App:
         self.sticker_cache = {}
         self.credits_img = self.credits_fade = None  # montados no primeiro desenho
         self.credits_scroll = 0.0
+        self.sound_from = "menu"  # tela que abriu a de OPÇÕES (volta para ela): menu ou pause
+        self.dragging = None      # barra de volume sendo arrastada com o mouse
 
     def options(self):
         return {"menu": self.MAIN, "gameover": self.GAMEOVER}.get(self.mode, self.PAUSE)
@@ -1549,8 +1578,8 @@ class App:
         if option == "JOGAR":
             self.game = Game(self.screen)
             self.mode = "game"
-        elif option == "COMO JOGAR":
-            self.mode = "howto"
+        elif option == "OPÇÕES":
+            self.sound_from, self.mode, self.sel = self.mode, "sound", 0
         elif option == "CRÉDITOS":
             self.mode = "credits"
             self.credits_scroll = 0.0
@@ -1587,11 +1616,8 @@ class App:
                 self.mode = "menu"
                 play("menu_ok")
             return
-        if self.mode == "howto":  # qualquer tecla ou clique volta
-            if ev.type == pygame.KEYDOWN or (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1):
-                self.mode = "menu"
-                self.buttons = []
-                play("menu_ok")
+        if self.mode == "sound":
+            self.handle_sound_event(ev)
             return
         opts = self.options()
         if ev.type == pygame.KEYDOWN:
@@ -1615,18 +1641,74 @@ class App:
                 if rect.collidepoint(ev.pos):
                     self.choose(opts[i])
 
+    def handle_sound_event(self, ev):
+        """Tela OPÇÕES: setas para cima/baixo escolhem a barra (ou VOLTAR), para os
+        lados mudam 10%; com o mouse, clicar ou arrastar na barra."""
+        rows = len(self.SOUND) + 1  # as barras e o VOLTAR
+        if ev.type == pygame.KEYDOWN:
+            if ev.key in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s):
+                self.sel = (self.sel + (1 if ev.key in (pygame.K_DOWN, pygame.K_s) else -1)) % rows
+                play("menu_mover")
+            elif ev.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d) and self.sel < len(self.SOUND):
+                key = self.SOUND[self.sel][1]
+                step = 0.1 if ev.key in (pygame.K_RIGHT, pygame.K_d) else -0.1
+                self.set_volume(key, volume[key] + step)
+            elif ev.key == pygame.K_ESCAPE or (ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE)
+                                               and self.sel == len(self.SOUND)):
+                self.close_sound()
+        elif ev.type == pygame.MOUSEMOTION:
+            if self.dragging is not None:
+                self.volume_from_mouse(self.dragging, ev.pos[0])
+                return
+            for i, rect in enumerate(self.buttons):
+                if rect.inflate(0, 30).collidepoint(ev.pos) and i != self.sel:
+                    self.sel = i
+                    play("menu_mover")
+        elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+            for i, rect in enumerate(self.buttons):
+                if not rect.inflate(0, 30).collidepoint(ev.pos):
+                    continue
+                if i == len(self.SOUND):
+                    self.close_sound()
+                else:
+                    self.sel = self.dragging = i
+                    self.volume_from_mouse(i, ev.pos[0])
+                break
+        elif ev.type == pygame.MOUSEBUTTONUP and ev.button == 1 and self.dragging is not None:
+            if self.SOUND[self.dragging][1] == "efeitos":
+                play("menu_mover")  # amostra do volume novo
+            self.dragging = None
+            save_config()
+
+    def set_volume(self, key, value):
+        volume[key] = round(min(1.0, max(0.0, value)), 2)
+        save_config()
+        if key == "efeitos":
+            play("menu_mover")  # amostra do volume novo
+
+    def volume_from_mouse(self, row, x):
+        bar = self.buttons[row]
+        volume[self.SOUND[row][1]] = round(min(1.0, max(0.0, (x - bar.left) / bar.w)), 2)
+
+    def close_sound(self):
+        save_config()
+        self.dragging = None
+        self.mode = self.sound_from
+        self.sel = self.options().index("OPÇÕES")
+        play("menu_ok")
+
     def update(self, dt):
         music_volume(0.4 if self.mode in ("pause", "gameover") else 1.0)  # mais baixa com o jogo parado
         if self.mode == "game":
             self.game.update(dt)
             if self.game.state == "gameover":  # acabaram os barcos: botoes de jogar de novo / menu
                 self.mode, self.sel = "gameover", 0
-        elif self.mode in ("menu", "credits", "howto"):
+        elif self.mode in ("menu", "credits") or (self.mode == "sound" and self.sound_from == "menu"):
             self.menu_t += dt
             if self.mode == "credits":
                 self.credits_scroll += CREDITS_SPEED * dt
 
-    def draw_menu_bg(self, title=True):
+    def draw_menu_bg(self, title=True, boat=True):
         """Fundo do menu: a agua rola para tras do barco (que anda na direcao
         MENU_BOAT_ANGLE), o barco balanca com a espuma animada, e o titulo
         (se pedido) fica a direita."""
@@ -1639,8 +1721,9 @@ class App:
         for y in range(oy - th, H, th):
             for x in range(ox - tw, W, tw):
                 scr.blit(tile, (x, y))
-        frame = self.menu_boat[int(t * 8) % len(self.menu_boat)]
-        scr.blit(frame, (0, round(math.sin(t * 2.2) * 3)))  # balanco na agua
+        if boat:
+            frame = self.menu_boat[int(t * 8) % len(self.menu_boat)]
+            scr.blit(frame, (0, round(math.sin(t * 2.2) * 3)))  # balanco na agua
         if title:
             scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X, 74)))
 
@@ -1672,6 +1755,35 @@ class App:
         img = self.sticker(msg, self.record_font)
         scr.blit(img, img.get_rect(center=(MENU_X, 418)))
 
+    def draw_start_help(self):
+        """Comeco da corrida: um painel escuro de cantos arredondados no alto com
+        os controles em colunas (tecla em cima, nome embaixo) e, separado por
+        uma linha fina, o aviso para apertar uma tecla (pulsando de leve). O
+        barco fica livre no meio."""
+        scr, game = self.screen, self.game
+        col_w, scale = 100, 0.65  # largura de cada coluna; teclas menores
+        panel = pygame.Rect(0, 0, col_w * len(CONTROLS) + 24, 112)
+        panel.midtop = (W // 2, 70)
+        box = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(box, (0, 15, 30, 165), box.get_rect(), border_radius=14)
+        pygame.draw.line(box, (255, 255, 255, 50), (22, 80), (panel.w - 22, 80), 2)  # separa o aviso
+        scr.blit(box, panel)
+        for i, (keys, _, short) in enumerate(CONTROLS):
+            cx = panel.left + 12 + col_w * i + col_w // 2
+            caps = [self.keycap(k) for k in keys]
+            caps = [pygame.transform.smoothscale(c, (round(c.get_width() * scale), round(c.get_height() * scale)))
+                    for c in caps]
+            w = sum(c.get_width() for c in caps) + 4 * (len(caps) - 1)
+            x = cx - w // 2
+            for cap in caps:
+                scr.blit(cap, cap.get_rect(midleft=(x, panel.top + 28)))
+                x += cap.get_width() + 4
+            img = self.credit_head_font.render(short, True, (255, 255, 255))
+            scr.blit(img, img.get_rect(center=(cx, panel.top + 60)))
+        img = self.credit_head_font.render("APERTE QUALQUER TECLA PARA INICIAR", True, (220, 235, 245))
+        img.set_alpha(round(175 + 80 * math.sin(game.anim * 3.5)))  # pulsa devagar
+        scr.blit(img, img.get_rect(center=(panel.centerx, panel.top + 97)))
+
     def draw_pause(self):
         """Pausa no visual do jogo: o jogo escurecido atras, o titulo com o
         contorno do placar e os botoes cartoon."""
@@ -1680,10 +1792,69 @@ class App:
         shade_.fill((0, 15, 30, 160))
         scr.blit(shade_, (0, 0))
         title = game.text_image("PAUSADO", game.font)
-        scr.blit(title, title.get_rect(center=(W // 2, H // 2 - 64)))
+        scr.blit(title, title.get_rect(center=(W // 2, H // 2 - 90)))
         self.buttons = []
         for i, label in enumerate(self.PAUSE):
-            self.buttons.append(self.draw_menu_button(label, (W // 2, H // 2 + 2 + i * 58), i == self.sel))
+            self.buttons.append(self.draw_menu_button(label, (W // 2, H // 2 - 24 + i * 58), i == self.sel))
+
+    def draw_sound(self):
+        """Tela OPÇÕES: no visual do menu (aberta pelo menu, sem o barco) ou por
+        cima do jogo escurecido, sem o placar (aberta pela pausa). Duas colunas:
+        os volumes a esquerda e os controles a direita; o VOLTAR embaixo."""
+        scr = self.screen
+        if self.sound_from == "menu":
+            self.draw_menu_bg(title=False, boat=False)
+            img = self.sticker("OPÇÕES", self.menu_font_sel, depth=3)
+        else:
+            self.game.paused = True
+            self.game.show_hud = False  # o titulo fica onde estaria o placar
+            self.game.draw()
+            self.game.show_hud = True
+            shade_ = pygame.Surface((W, H), pygame.SRCALPHA)
+            shade_.fill((0, 15, 30, 160))
+            scr.blit(shade_, (0, 0))
+            img = self.game.text_image("OPÇÕES", self.game.font)
+        scr.blit(img, img.get_rect(center=(W // 2, 48)))
+        left, right = 155, 452  # meio de cada coluna
+        line = pygame.Rect(0, 0, 8, 260)  # divisoria entre as colunas: traco claro com contorno escuro
+        line.center = (296, 232)
+        pygame.draw.rect(scr, (32, 36, 43), line, border_radius=4)
+        pygame.draw.rect(scr, (245, 250, 252), line.inflate(-4, -4), border_radius=2)
+        for cx, head in ((left, "VOLUME"), (right, "CONTROLES")):
+            img = self.sticker(head, self.credit_head_font, ink=(245, 250, 252), line=(20, 19, 24), depth=1)
+            scr.blit(img, img.get_rect(center=(cx, 112)))
+        self.buttons = []
+        for i, (label, key) in enumerate(self.SOUND):
+            self.buttons.append(self.draw_slider(label, volume[key], (left, 182 + i * 90), i == self.sel))
+        self.draw_controls(right, 165, 56)
+        self.buttons.append(self.draw_menu_button("VOLTAR", (W // 2, 418), self.sel == len(self.SOUND)))
+
+    def draw_slider(self, label, value, center, sel):
+        """Barra de volume no estilo dos botoes: nome em adesivo em cima, barra
+        com contorno escuro e relevo, a parte cheia em amarelo (selecionada) ou
+        cinza-azulado, a porcentagem no meio e setinhas dos lados quando
+        selecionada. Devolve o retangulo da barra (para o mouse)."""
+        scr, ink = self.screen, (32, 36, 43)
+        cx, cy = center
+        img = self.sticker(label, self.record_font)
+        scr.blit(img, img.get_rect(center=(cx, cy - 30)))
+        bar = pygame.Rect(0, 0, 210, 30)
+        bar.center = (cx, cy + 4)
+        pygame.draw.rect(scr, ink, bar.move(0, 4), border_radius=10)  # relevo embaixo
+        pygame.draw.rect(scr, (232, 242, 250), bar, border_radius=10)
+        if value > 0:
+            full = pygame.Rect(bar.x, bar.y, max(20, round(bar.w * value)), bar.h)
+            pygame.draw.rect(scr, (242, 214, 130) if sel else (164, 184, 198), full, border_radius=10)
+        pygame.draw.rect(scr, ink, bar, 3, border_radius=10)
+        txt = self.menu_font.render("%d%%" % round(value * 100), True, ink)
+        scr.blit(txt, txt.get_rect(center=(bar.centerx, bar.centery + 1)))
+        if sel:  # setinhas: as setas do teclado mudam o volume
+            for side in (-1, 1):
+                x = bar.centerx + side * (bar.w // 2 + 18)
+                pts = [(x + side * 8, bar.centery), (x - side * 6, bar.centery - 9), (x - side * 6, bar.centery + 9)]
+                pygame.draw.polygon(scr, (245, 250, 252), pts)
+                pygame.draw.polygon(scr, ink, pts, 2)
+        return bar
 
     def draw_credits(self):
         """Creditos no mesmo visual do menu: mesmo fundo, textos em adesivo
@@ -1705,16 +1876,12 @@ class App:
         self.buttons = []  # qualquer tecla ou clique volta (ver handle_event)
         self.draw_menu_button("VOLTAR", (MENU_X, 418), True)
 
-    def draw_howto(self):
-        """Como jogar: so os controles, no visual do menu. Na coluna da direita
-        cada linha tem as teclas desenhadas e, ao lado, o que elas fazem."""
+    def draw_controls(self, cx, y, step):
+        """Lista de controles centrada em cx a partir de y: em cada linha as
+        teclas desenhadas e, ao lado, o que elas fazem."""
         scr = self.screen
-        self.draw_menu_bg(title=False)
-        img = self.sticker("CONTROLES", self.menu_font_sel)
-        scr.blit(img, img.get_rect(center=(MENU_X, 62)))
-        keys_x, text_x = MENU_X - 85, MENU_X - 15  # meio das teclas, comeco do texto
-        y = 235 - (len(CONTROLS) - 1) * 28  # linhas centradas entre o titulo e o botao
-        for keys, action in CONTROLS:
+        keys_x, text_x = cx - 85, cx - 15  # meio das teclas, comeco do texto
+        for keys, action, _ in CONTROLS:
             caps = [self.keycap(k) for k in keys]
             w = sum(c.get_width() for c in caps) + 6 * (len(caps) - 1)
             x = keys_x - w // 2
@@ -1723,9 +1890,7 @@ class App:
                 x += cap.get_width() + 6
             img = self.sticker(action, self.record_font)
             scr.blit(img, img.get_rect(midleft=(text_x, y)))
-            y += 56
-        self.buttons = []  # qualquer tecla ou clique volta (ver handle_event)
-        self.draw_menu_button("VOLTAR", (MENU_X, 418), True)
+            y += step
 
     def keycap(self, key):
         """Desenho de uma tecla no estilo dos botoes do menu: face clara, contorno
@@ -1813,17 +1978,22 @@ class App:
         if self.mode == "credits":
             self.draw_credits()
             return
+        if self.mode == "sound":
+            self.draw_sound()
+            return
         if self.mode in ("game", "pause", "gameover"):
-            self.game.paused = self.mode == "pause"
+            # comeco da corrida (rio 1 esperando a primeira tecla): mostra os controles
+            help_ = self.mode == "game" and self.game.waiting and self.game.river == 1
+            self.game.paused = self.mode == "pause" or help_  # o aviso do centro sai (vai embaixo dos controles)
             self.game.draw()
             if self.mode == "pause":
                 self.draw_pause()
+            elif help_:
+                self.draw_start_help()
             elif self.mode == "gameover":
                 self.buttons = []
                 for i, label in enumerate(self.GAMEOVER):
                     self.buttons.append(self.draw_menu_button(label, (W // 2, H // 2 + 50 + i * 58), i == self.sel))
-            return
-        self.draw_howto()
 
 def main():
     os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "linear")  # ampliacao suave, sem serrilhado
