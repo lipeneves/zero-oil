@@ -376,13 +376,13 @@ class Game:
             SPOUT: water_tinted("base/jato.svg", (96, 144)),  # um tom por nivel de poluicao
             FISH: [load_image("base/peixe.svg", (96, 96)), load_image("base/peixe_nadando.svg", (96, 72))],
         }
-        self.img = {n: load_image(n + ".png") for n in (
-            "sombra", "menu_painel")}
+        self.img = {"sombra": load_image("sombra.png")}
         # marcador da estacao: bolha verde com o simbolo de reciclagem e o contador "0/x"
         self.img["popup_contador"] = load_image("base/popup_contador.svg", (240, 120))
         # anel de onda em volta do que boia: um tom por nivel de poluicao (da cor da agua)
         self.ripples = water_tinted("base/onda.svg", (128, 128))
         self.img["coracao"] = load_image("base/coracao.svg", (28, 26))  # vidas no placar
+        self.img["coracao_grande"] = load_image("base/coracao.svg", (40, 37))  # "+1" no fim do rio
         # minimapa: moldura redonda e a setinha do barco no meio
         self.img["minimapa"] = load_image("base/minimapa.svg", (108, 108))
         self.img["minimapa_barco"] = load_image("base/minimapa_barco.svg", (16, 16))
@@ -711,7 +711,7 @@ class Game:
             self.crash("BATEU NO CONE!")
             return
         elif cell == FISH:
-            self.crash("ATROPELOU UM PEIXE!")
+            self.crash("VOCÊ MATOU UM PEIXE!")
             return
         elif cell == SPOUT:
             self.start_jump(6.0, 3.5)
@@ -1278,43 +1278,24 @@ class Game:
             scr.blit(img, img.get_rect(center=(self.ground[0], self.ground[1] - 140 - age * 45)))
 
         if self.state == "clear":
-            lines = [("RIO %d LIMPO!" % self.river, self.font, (255, 255, 255)),
-                     ("bônus +%d" % self.clear_bonus, self.small, (255, 230, 120))]
+            lines = [(("RIO %d LIMPO!" % self.river, self.popup_font, (190, 255, 160)),
+                      ("+%d" % self.clear_bonus, self.popup_font, (255, 230, 120)))]
             if self.extra_life:
-                lines.append(("+1 BARCO!", self.small, (255, 255, 255)))
-            self.draw_banner(lines, 2.8, (72, 176, 96))
+                lines.append(("+1", self.font, (255, 255, 255), "coracao_grande"))
+            self.draw_banner(lines, 2.8)
         elif self.state == "fail":
             left = "último barco!" if self.lives == 1 else "restam %d barcos" % self.lives
-            self.draw_banner([(self.fail_msg, self.font, (255, 255, 255)),
-                              ("-1 barco  ·  " + left, self.small, (255, 230, 120))], 1.6, (214, 72, 72))
+            self.draw_banner([(self.fail_msg, self.popup_font, (255, 140, 130)),
+                              (left, self.small, (255, 255, 255))], 1.6)
         elif self.waiting and not self.paused:
             self.text("APERTE QUALQUER TECLA PARA INICIAR", self.small, (W // 2, 170))
         elif self.msg_timer > 0:
             self.text(self.message, self.font, (W // 2, 170))
 
-    def draw_banner(self, lines, length, fill):
-        """Cartao do fim de rio / batida: as linhas de texto num retangulo
-        arredondado com o contorno escuro do estilo cartoon e uma sombra embaixo.
-        Entra crescendo de leve e some no fim (length = duracao do estado).
-        fill = cor do cartao (verde no rio limpo, vermelho na batida)."""
-        key = (tuple(lines), fill)
-        card = self.text_cache.get(key)
-        if card is None:
-            imgs = [self.text_image(msg, font, color) for msg, font, color in lines]
-            pad_x, pad_y, gap, shadow = 26, 12, 2, 5
-            w = max(280, max(img.get_width() for img in imgs) + 2 * pad_x)
-            h = sum(img.get_height() for img in imgs) + gap * (len(imgs) - 1) + 2 * pad_y
-            card = pygame.Surface((w, h + shadow), pygame.SRCALPHA)
-            pygame.draw.rect(card, (32, 36, 43, 110), (0, shadow, w, h), border_radius=18)
-            pygame.draw.rect(card, fill, (0, 0, w, h), border_radius=18)
-            light = [min(255, c + 45) for c in fill]  # brilho em cima, como nos botoes cartoon
-            pygame.draw.rect(card, light, (8, 6, w - 16, 5), border_radius=3)
-            pygame.draw.rect(card, (32, 36, 43), (0, 0, w, h), 3, border_radius=18)
-            y = pad_y
-            for img in imgs:
-                card.blit(img, img.get_rect(midtop=(w // 2, y)))
-                y += img.get_height() + gap
-            self.text_cache[key] = card
+    def draw_banner(self, lines, length):
+        """Aviso do fim de rio / batida (sem caixa). Entra crescendo de leve e
+        some no fim (length = duracao do estado)."""
+        card = self.relief_text(lines)
         age = length - self.state_timer
         img = card
         if age < 0.25:  # entra crescendo e passa um pouquinho do tamanho (sem exagero)
@@ -1325,7 +1306,62 @@ class Game:
         if self.state_timer < 0.3:  # some no fim
             img = img.copy()
             img.set_alpha(int(255 * max(0.0, self.state_timer) / 0.3))
-        self.screen.blit(img, img.get_rect(center=(W // 2, 150)))
+        self.screen.blit(img, img.get_rect(center=(W // 2, 125)))
+
+    def relief_text(self, lines):
+        """Linhas de texto empilhadas e centradas, com o contorno cartoon e um
+        relevo escuro embaixo. Cada linha e um pedaco (msg, fonte, cor[, icone])
+        ou uma tupla de pedacos lado a lado (alinhados pela base das letras); o icone (nome
+        em self.img) vai logo antes do texto. Guardado pronto."""
+        key = ("banner",) + tuple(lines)
+        card = self.text_cache.get(key)
+        if card is None:
+            imgs = []
+            for line in lines:
+                specs = line if isinstance(line[0], tuple) else (line,)
+                parts = [self.relief_part(*part) for part in specs]
+                if len(parts) == 1:
+                    imgs.append(parts[0])
+                    continue
+                # topo de cada pedaco ate a base das letras (o contorno soma r em volta)
+                tops = [max(2, f.get_height() // 16) + f.get_ascent() for _, f, *_ in specs]
+                base = max(tops)
+                space = 14
+                w = sum(img.get_width() for img, _ in parts) + space * (len(parts) - 1)
+                h = max(base - t + img.get_height() for t, (img, _) in zip(tops, parts))
+                row, under = pygame.Surface((w, h), pygame.SRCALPHA), pygame.Surface((w, h), pygame.SRCALPHA)
+                x = 0
+                for t, (img, relief) in zip(tops, parts):
+                    row.blit(img, (x, base - t))
+                    under.blit(relief, (x, base - t))
+                    x += img.get_width() + space
+                imgs.append((row, under))
+            gap, depth = 0, 4
+            w = max(img.get_width() for img, _ in imgs)
+            h = sum(img.get_height() for img, _ in imgs) + gap * (len(imgs) - 1) + depth
+            card = pygame.Surface((w, h), pygame.SRCALPHA)
+            y = 0
+            for img, relief in imgs:
+                for d in range(depth, 0, -1):  # relevo descendo, como nos adesivos do menu
+                    card.blit(relief, relief.get_rect(midtop=(w // 2, y + d)))
+                card.blit(img, img.get_rect(midtop=(w // 2, y)))
+                y += img.get_height() + gap
+            self.text_cache[key] = card
+        return card
+
+    def relief_part(self, msg, font, color, *icon):
+        """Um pedaco de relief_text: o texto e a mesma forma em escuro (o relevo)."""
+        img, relief = self.text_image(msg, font, color), self.text_image(msg, font, (32, 36, 43))
+        if icon:  # icone + texto lado a lado (o icone ja tem o proprio contorno)
+            pic = self.img[icon[0]]
+            w = img.get_width() + 4 + pic.get_width()
+            h = max(img.get_height(), pic.get_height())
+            both, under = pygame.Surface((w, h), pygame.SRCALPHA), pygame.Surface((w, h), pygame.SRCALPHA)
+            both.blit(pic, pic.get_rect(midleft=(0, h // 2)))
+            both.blit(img, img.get_rect(midright=(w, h // 2)))
+            under.blit(relief, relief.get_rect(midright=(w, h // 2)))
+            img, relief = both, under
+        return img, relief
 
     # cores do minimapa (estilo cartoon: cada coisa e uma bolinha com contorno escuro)
     MAP_COLORS = {OIL: (12, 12, 16), FISH: (255, 140, 30), BUOY: (235, 55, 55),
@@ -1377,24 +1413,21 @@ class Game:
         self.screen.blit(arrow, arrow.get_rect(center=center))
 
     def draw_gameover(self):
-        """Fim da corrida: so o essencial, num painel central sobre o jogo escurecido."""
+        """Fim de jogo: o jogo escurecido, os pontos e o recorde (os botoes
+        embaixo sao desenhados pelo App)."""
         scr = self.screen
         shade_ = pygame.Surface((W, H), pygame.SRCALPHA)
-        shade_.fill((0, 15, 30, 205))
+        shade_.fill((0, 15, 30, 160))
         scr.blit(shade_, (0, 0))
-        panel = self.scaled(("painel_fim",), self.img["menu_painel"], 380, 300)
-        rect = panel.get_rect(center=(W // 2, H // 2))
-        scr.blit(panel, rect)
-        cx, top = W // 2, rect.top
-        self.text("FIM DA CORRIDA", self.font, (cx, top + 42))
-        self.text(str(self.score), self.big, (cx, top + 112), (255, 230, 120))
-        self.text("pontos  ·  rio %d" % self.river, self.small, (cx, top + 158), (220, 235, 245))
+        lines = [("SEU BARCO AFUNDOU", self.font, (255, 255, 255))]
         if self.new_record:
-            self.text("NOVO RECORDE!", self.small, (cx, top + 192), (150, 255, 170))
-        else:
-            self.text("recorde %d" % self.best["pontos"], self.small, (cx, top + 192), (160, 180, 195))
-        self.text("ENTER  mais uma vez", self.small, (cx, top + 238), (255, 215, 80))
-        self.text("Esc  menu", self.small, (cx, top + 266), (160, 180, 195))
+            lines += [(str(self.score), self.big, (255, 230, 120)),
+                      ("NOVO RECORDE!", self.font, (190, 255, 160))]
+        else:  # "pontos / recorde", como no placar do alto da tela
+            lines.append(((str(self.score), self.big, (255, 230, 120)),
+                          ("/ %d" % self.best["pontos"], self.font, (220, 235, 245))))
+        img = self.relief_text(lines)
+        scr.blit(img, img.get_rect(midbottom=(W // 2, H // 2 + 10)))
 
 
 # --- menu ---------------------------------------------------------------------
@@ -1424,11 +1457,12 @@ class App:
 
     MAIN = ["JOGAR", "COMO JOGAR", "CRÉDITOS", "SAIR"]
     PAUSE = ["CONTINUAR", "MENU PRINCIPAL"]
+    GAMEOVER = ["JOGAR DE NOVO", "MENU PRINCIPAL"]
 
     def __init__(self, screen):
         self.screen = screen
         self.game = None
-        self.mode = "menu"  # menu, howto, game, pause
+        self.mode = "menu"  # menu, howto, credits, game, pause, gameover
         self.sel = 0
         self.buttons = []
         # menu principal: agua rolando, barco andando na diagonal, titulo e botoes a direita
@@ -1449,7 +1483,7 @@ class App:
         self.credits_scroll = 0.0
 
     def options(self):
-        return self.MAIN if self.mode == "menu" else self.PAUSE
+        return {"menu": self.MAIN, "gameover": self.GAMEOVER}.get(self.mode, self.PAUSE)
 
     def choose(self, option):
         if option == "JOGAR":
@@ -1464,6 +1498,9 @@ class App:
             pygame.quit()
             sys.exit()
         elif option == "CONTINUAR":
+            self.mode = "game"
+        elif option == "JOGAR DE NOVO":
+            self.game.reset_run()
             self.mode = "game"
         elif option == "MENU PRINCIPAL":
             self.mode, self.sel = "menu", 0
@@ -1503,7 +1540,7 @@ class App:
             elif ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                 self.choose(opts[self.sel])
             elif ev.key == pygame.K_ESCAPE:
-                self.choose("SAIR" if self.mode == "menu" else "CONTINUAR")
+                self.choose({"menu": "SAIR", "pause": "CONTINUAR"}.get(self.mode, "MENU PRINCIPAL"))
         elif ev.type == pygame.MOUSEMOTION:
             for i, rect in enumerate(self.buttons):
                 if rect.collidepoint(ev.pos):
@@ -1516,6 +1553,8 @@ class App:
     def update(self, dt):
         if self.mode == "game":
             self.game.update(dt)
+            if self.game.state == "gameover":  # acabaram os barcos: botoes de jogar de novo / menu
+                self.mode, self.sel = "gameover", 0
         elif self.mode in ("menu", "credits", "howto"):
             self.menu_t += dt
             if self.mode == "credits":
@@ -1708,11 +1747,15 @@ class App:
         if self.mode == "credits":
             self.draw_credits()
             return
-        if self.mode in ("game", "pause"):
+        if self.mode in ("game", "pause", "gameover"):
             self.game.paused = self.mode == "pause"
             self.game.draw()
             if self.mode == "pause":
                 self.draw_pause()
+            elif self.mode == "gameover":
+                self.buttons = []
+                for i, label in enumerate(self.GAMEOVER):
+                    self.buttons.append(self.draw_menu_button(label, (W // 2, H // 2 + 50 + i * 58), i == self.sel))
             return
         self.draw_howto()
 
