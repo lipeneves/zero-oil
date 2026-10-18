@@ -1,0 +1,41 @@
+{
+  "arquivos": [
+    "barco_parado.png",
+    "barco_ar.png",
+    "barco_andando_1.png",
+    "barco_andando_2.png",
+    "barco_andando_3.png",
+    "barco_andando_4.png"
+  ],
+  "tamanho": [
+    260,
+    340
+  ],
+  "apoio": [
+    130.0,
+    102.7
+  ],
+  "esteira": [
+    [
+      128.6,
+      27.1
+    ],
+    [
+      128.6,
+      63.8
+    ]
+  ],
+  "cacamba": [
+    "cacamba_1.png",
+    "cacamba_2.png",
+    "cacamba_3.png",
+    "cacamba_4.png",
+    "cacamba_5.png",
+    "cacamba_6.png",
+    "cacamba_7.png",
+    "cacamba_8.png"
+  ],
+  "luz": "luz_acesa.png",
+  "gota": "gota_oleo.png",
+  "obs": "apoio = ponto (em px, a partir do canto de cima) onde o objeto encosta na agua; esteira = de onde ate onde o oleo recolhido desliza (px no quadro); cacamba = camadas do oleo na cacamba (vazia -> cheia); luz = camada da luz acesa (pisca)"
+}
