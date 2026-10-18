@@ -40,13 +40,7 @@
         <path d="M407.4 225.0 L409.4 255.0" fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="3.5" stroke-linecap="round"/>
         <path d="M409.4 295.0 L411.4 325.0" fill="none" stroke="#ffffff" stroke-opacity="0.90" stroke-width="3.5" stroke-linecap="round"/>
         <path d="M411.4 365.0 L413.4 395.0" fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="3.5" stroke-linecap="round"/>
-        <circle cx="251.4" cy="482.0" r="14.0" fill="#8fe7ee"/>
-        <circle cx="265.4" cy="486.6" r="16.6" fill="#8fe7ee"/>
-        <circle cx="279.4" cy="488.6" r="16.6" fill="#8fe7ee"/>
-        <circle cx="293.4" cy="488.0" r="14.0" fill="#8fe7ee"/>
-        <circle cx="307.4" cy="483.4" r="11.4" fill="#8fe7ee"/>
-        <circle cx="321.4" cy="481.4" r="11.4" fill="#8fe7ee"/>
-        <circle cx="335.4" cy="482.0" r="14.0" fill="#8fe7ee"/>
+        <path d="M237.4 482.0 a14.0 14.0 0 1 0 28.0 0 a14.0 14.0 0 1 0 -28.0 0 Z M248.8 486.6 a16.6 16.6 0 1 0 33.2 0 a16.6 16.6 0 1 0 -33.2 0 Z M262.8 488.6 a16.6 16.6 0 1 0 33.2 0 a16.6 16.6 0 1 0 -33.2 0 Z M279.4 488.0 a14.0 14.0 0 1 0 28.0 0 a14.0 14.0 0 1 0 -28.0 0 Z M296.0 483.4 a11.4 11.4 0 1 0 22.8 0 a11.4 11.4 0 1 0 -22.8 0 Z M310.0 481.4 a11.4 11.4 0 1 0 22.8 0 a11.4 11.4 0 1 0 -22.8 0 Z M321.4 482.0 a14.0 14.0 0 1 0 28.0 0 a14.0 14.0 0 1 0 -28.0 0 Z" fill="#ffffff" fill-opacity="0.40"/>
         <circle cx="251.4" cy="478.0" r="11.0" fill="#ffffff"/>
         <circle cx="265.4" cy="482.6" r="13.6" fill="#ffffff"/>
         <circle cx="279.4" cy="484.6" r="13.6" fill="#ffffff"/>

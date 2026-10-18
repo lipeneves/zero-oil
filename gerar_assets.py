@@ -579,12 +579,16 @@ def _wake_svg(phase, width, height):
     out = []
 
     def cloud(blobs, grow=0.0):
-        """Espuma: circulos brancos sobre circulos ciano um pouco maiores e
-        mais baixos (a sombra), como nos jogos cartoon."""
-        shade = ['<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>' % (x, y + 4, r + 4 + grow, FOAM_SHADE)
-                 for x, y, r in blobs]
-        white = ['<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>' % (x, y, r, FOAM_WHITE) for x, y, r in blobs]
-        out.extend(shade + white)
+        """Espuma: circulos brancos sobre circulos um pouco maiores e mais
+        baixos (a sombra), como nos jogos cartoon. A sombra e branca
+        translucida, entao fica um tom mais claro da agua que estiver embaixo
+        (limpa ou poluida). Os circulos dela sao um path so, para a
+        transparencia nao somar onde eles se encostam."""
+        rings = " ".join("M%.1f %.1f a%.1f %.1f 0 1 0 %.1f 0 a%.1f %.1f 0 1 0 %.1f 0 Z"
+                         % (x - R, y + 4, R, R, 2 * R, R, R, -2 * R)
+                         for x, y, R in ((x, y, r + 4 + grow) for x, y, r in blobs))
+        out.append('<path d="%s" fill="%s" fill-opacity="%.2f"/>' % (rings, FOAM_WHITE, FOAM_SHADE_OPACITY))
+        out.extend('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>' % (x, y, r, FOAM_WHITE) for x, y, r in blobs)
 
     # agua entrando no coletor: arquinhos que chegam na boca do U e encolhem la dentro
     (mx0, my0), (mx1, my1) = WAKE_MOUTH
@@ -620,8 +624,9 @@ def _wake_svg(phase, width, height):
 
 
 def _trail_svg(phase, width, height, bend):
-    """Rastros na agua atras do barco: poucas faixas ciano longas e onduladas
-    saindo da popa, abrindo um pouco e sumindo. 'bend' (graus) curva os
+    """Rastros na agua atras do barco: poucas faixas claras longas e onduladas
+    saindo da popa, abrindo um pouco e sumindo. Sao brancas translucidas: ficam
+    um tom mais claro da cor da agua embaixo. 'bend' (graus) curva os
     rastros: rente a popa eles seguem o barco e, mais longe, viram para o
     lado ate apontar 'bend' graus (positivo = para a direita do quadro), como
     o caminho que o barco fez antes de virar."""
@@ -646,18 +651,21 @@ def _trail_svg(phase, width, height, bend):
             pts.append((mid[k][0] + math.cos(ang[k]) * side, mid[k][1] - math.sin(ang[k]) * side))
         for k in range(m):                                     # pedacos seguidos, cada vez mais apagados
             t = k / m
-            op = 0.8 * min(1.0, (t + 0.04) / 0.12) * (1 - t) ** 1.1
+            op = WAKE_TRAIL_OPACITY * min(1.0, (t + 0.04) / 0.12) * (1 - t) ** 1.1
+            cap = "round" if k in (0, m - 1) else "butt"  # sem bolinhas mais claras nas emendas
             out.append('<path d="M%.1f %.1f L%.1f %.1f" fill="none" stroke="%s" stroke-opacity="%.2f" '
-                       'stroke-width="%.1f" stroke-linecap="round"/>'
-                       % (pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], WAKE_TRAIL, op, w * (1 - 0.45 * t)))
+                       'stroke-width="%.1f" stroke-linecap="%s"/>'
+                       % (pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1], WAKE_TRAIL, op, w * (1 - 0.45 * t), cap))
     return "\n".join(out)
 
 
 TRAIL_BENDS = list(range(-90, 91, 15))  # curvas pre-desenhadas do rastro (graus)
 TRAIL_PAD = 70                          # margem dos lados do quadro do rastro (px), para a curva caber
 FOAM_WHITE = "#ffffff"
-FOAM_SHADE = "#8fe7ee"   # sombra ciano da espuma
-WAKE_TRAIL = "#bff6f7"   # rastros atras do barco
+# sombra da espuma e rastros: branco translucido, para pegar a cor da agua embaixo
+FOAM_SHADE_OPACITY = 0.4
+WAKE_TRAIL = FOAM_WHITE
+WAKE_TRAIL_OPACITY = 0.6
 WAKE_MOUTH = ((240.0, 44.0), (347.0, 64.0))  # boca do coletor (cantos, unidades do quadro SVG)
 WAKE_SIDES = ((190.0, 400.0), 113.0)          # riscos dos lados: de onde ate onde (y) e distancia do meio
 

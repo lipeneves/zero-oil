@@ -40,13 +40,7 @@
         <path d="M408.9 277.5 L410.9 307.5" fill="none" stroke="#ffffff" stroke-opacity="0.87" stroke-width="3.5" stroke-linecap="round"/>
         <path d="M410.9 347.5 L412.9 377.5" fill="none" stroke="#ffffff" stroke-opacity="0.64" stroke-width="3.5" stroke-linecap="round"/>
         <path d="M406.9 207.5 L408.9 237.5" fill="none" stroke="#ffffff" stroke-opacity="0.23" stroke-width="3.5" stroke-linecap="round"/>
-        <circle cx="251.4" cy="479.0" r="11.0" fill="#8fe7ee"/>
-        <circle cx="265.4" cy="482.5" r="12.5" fill="#8fe7ee"/>
-        <circle cx="279.4" cy="487.5" r="15.5" fill="#8fe7ee"/>
-        <circle cx="293.4" cy="491.0" r="17.0" fill="#8fe7ee"/>
-        <circle cx="307.4" cy="487.5" r="15.5" fill="#8fe7ee"/>
-        <circle cx="321.4" cy="482.5" r="12.5" fill="#8fe7ee"/>
-        <circle cx="335.4" cy="479.0" r="11.0" fill="#8fe7ee"/>
+        <path d="M240.4 479.0 a11.0 11.0 0 1 0 22.0 0 a11.0 11.0 0 1 0 -22.0 0 Z M252.9 482.5 a12.5 12.5 0 1 0 25.0 0 a12.5 12.5 0 1 0 -25.0 0 Z M263.9 487.5 a15.5 15.5 0 1 0 31.0 0 a15.5 15.5 0 1 0 -31.0 0 Z M276.4 491.0 a17.0 17.0 0 1 0 34.0 0 a17.0 17.0 0 1 0 -34.0 0 Z M291.9 487.5 a15.5 15.5 0 1 0 31.0 0 a15.5 15.5 0 1 0 -31.0 0 Z M308.9 482.5 a12.5 12.5 0 1 0 25.0 0 a12.5 12.5 0 1 0 -25.0 0 Z M324.4 479.0 a11.0 11.0 0 1 0 22.0 0 a11.0 11.0 0 1 0 -22.0 0 Z" fill="#ffffff" fill-opacity="0.40"/>
         <circle cx="251.4" cy="475.0" r="8.0" fill="#ffffff"/>
         <circle cx="265.4" cy="478.5" r="9.5" fill="#ffffff"/>
         <circle cx="279.4" cy="483.5" r="12.5" fill="#ffffff"/>
