@@ -22,6 +22,8 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 
 **Água:** a água do jogo não é imagem: o fundo e as ondas são desenhados pelo código (cores em `WATER_COLORS` e formato das ondas em `water_bands`, no `blue_sphere.py`). Só o fundo do menu usa a textura `agua_limpa.png`, feita com as mesmas ondas; recrie com `python gerar_assets.py --agua`.
 
+O visual da água é baseado no vetor ["Blue water surface template in cartoon style"](https://www.magnific.com/free-vector/blue-water-surface-template-cartoon-style_14803814.htm), de **brgfx**, no Magnific (antigo Freepik). Ele usa a licença gratuita do Freepik, que **exige crédito** ("Imagem de brgfx no Freepik"). O crédito está na tela de créditos do jogo; não remova.
+
 ## Barco (sempre visto de costas)
 
 | Arquivo | Quando aparece |
@@ -67,6 +69,8 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 | `base/peixe_nadando.svg` | Peixe debaixo d'água | 96×72 | Silhueta escura com a barbatana laranja (cartoon) para fora |
 | `feixe_luz.png` | Feixe de luz sobre a estação | 32×256 | Transparência em degradê |
 
+A boia é baseada no ícone "Bóia" (estilo Lineal Color, pacote "Sea"), de **Nhor Phai**, no [Flaticon](https://www.flaticon.com/authors/nhor-phai). A licença gratuita do Flaticon **exige crédito** ("Ícone criado por Nhor Phai - Flaticon"). O crédito está na tela de créditos do jogo; não remova.
+
 ## Coisas deitadas na água (vistas de cima)
 
 | Arquivo | O que é | Observação |
@@ -93,3 +97,25 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 | `menu_painel.png` | Painel atrás dos botões (menu e pausa) | 300×260 |
 | `botao.png` | Botão normal; o texto é escrito pelo jogo | 240×46 |
 | `botao_selecionado.png` | Botão selecionado (pelas setas ou com o mouse em cima) | 240×46 |
+
+## Sons
+
+Ficam em `sons/`, em `.ogg` (ou `.wav`). O jogo toca cada efeito pelo nome do arquivo. Para trocar um som, substitua o arquivo **com o mesmo nome**. O volume de cada efeito fica em `SOUND_VOLUME` e o da música em `MUSIC_VOLUME`, no `blue_sphere.py`. Se o computador estiver sem áudio ou faltar algum arquivo, o jogo continua sem som.
+
+Todos os sons são **CC0** (domínio público), menos o `batida.wav` (licença do Pixabay, veja na tabela): dá para usar e alterar livremente, sem dar crédito. Mesmo assim, os autores estão nos créditos do jogo.
+
+| Arquivo | Quando toca | Original | Fonte |
+|---|---|---|---|
+| `musica.ogg` | Música de fundo (menu e jogo, em loop; mais baixa na pausa e no fim de jogo) | `flowerbed_fields.ogg`, "Flowerbed Fields [Loop]", de Zane Little Music | [OpenGameArt](https://opengameart.org/content/flowerbed-fields-loop) |
+| `oleo.wav` | Recolheu uma mancha de óleo (sucção) | "Cartoon Slurp", de Breviceps (sem o silêncio das pontas) | [Freesound](https://freesound.org/people/Breviceps/sounds/573583/) (também no [Pixabay](https://pixabay.com/sound-effects/film-special-effects-cartoon-slurp-37066/)) |
+| `batida.wav` | Bateu num cone ou num peixe | "Cartoon Splat", de Universfield (sem o silêncio das pontas). **Licença do Pixabay**, não CC0: livre para usar no jogo, sem exigir crédito, mas não pode ser redistribuído como arquivo avulso | [Pixabay](https://pixabay.com/sound-effects/film-special-effects-cartoon-splat-310479/) |
+| `jato.ogg` | Passou por um jato d'água | `splash_09.ogg` | [40 CC0 water / splash / slime SFX](https://opengameart.org/content/40-cc0-water-splash-slime-sfx), de rubberduck |
+| `descarga.ogg` | Descarregou o óleo na estação | `confirmation_002.ogg` | [Interface Sounds](https://kenney.nl/assets/interface-sounds), da Kenney |
+| `menu_mover.ogg` | Mudou o botão selecionado | `select_001.ogg` | idem |
+| `menu_ok.ogg` | Escolheu um botão / voltou ao menu | `confirmation_001.ogg` | idem |
+| `pulo.ogg` | Pulo (barra de espaço) | `phaseJump1.ogg` | [Digital Audio](https://kenney.nl/assets/digital-audio), da Kenney |
+| `salto_duplo.ogg` | Salto duplo | `phaseJump3.ogg` | idem |
+| `vida.ogg` | Ganhou um barco extra | `powerUp2.ogg` | idem |
+| `rio_limpo.ogg` | Limpou o rio | `jingles_STEEL03.ogg` | [Music Jingles](https://kenney.nl/assets/music-jingles), da Kenney |
+| `fim.ogg` | Fim de jogo | `jingles_STEEL01.ogg` | idem |
+| `recorde.ogg` | Fim de jogo com recorde novo | `jingles_STEEL16.ogg` | idem |

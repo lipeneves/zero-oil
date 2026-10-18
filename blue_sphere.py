@@ -237,6 +237,49 @@ def save_record(points, river):
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 
+# --- sons ----------------------------------------------------------------------
+# efeitos em assets/sons/<nome>.ogg ou .wav (creditos e licencas no assets/README.md)
+SOUND_VOLUME = {"oleo": 0.5, "menu_mover": 0.5, "jato": 0.7}
+MUSIC_VOLUME = 0.22
+sounds = {}
+
+
+def init_sounds():
+    """Liga o audio e carrega os efeitos. Sem placa de som (ou sem os arquivos)
+    o jogo segue mudo, sem erro."""
+    try:
+        pygame.mixer.init()
+        pygame.mixer.set_num_channels(16)
+    except pygame.error:
+        return
+    folder = os.path.join(ASSETS_DIR, "sons")
+    for file in os.listdir(folder) if os.path.isdir(folder) else []:
+        name, ext = os.path.splitext(file)
+        if ext in (".ogg", ".wav") and name != "musica":
+            try:
+                sounds[name] = pygame.mixer.Sound(os.path.join(folder, file))
+                sounds[name].set_volume(SOUND_VOLUME.get(name, 0.8))
+            except pygame.error:
+                pass
+    try:
+        pygame.mixer.music.load(os.path.join(folder, "musica.ogg"))
+        pygame.mixer.music.set_volume(MUSIC_VOLUME)
+        pygame.mixer.music.play(-1)  # musica de fundo em loop, no menu e no jogo
+    except pygame.error:
+        pass
+
+
+def play(name):
+    if name in sounds:
+        sounds[name].play()
+
+
+def music_volume(k):
+    """Abaixa a musica (k < 1) na pausa e no fim de jogo; 1 volta ao normal."""
+    if pygame.mixer.get_init():
+        pygame.mixer.music.set_volume(MUSIC_VOLUME * k)
+
+
 def load_image(name, size=None):
     path = os.path.join(ASSETS_DIR, name)
     if name.endswith(".svg"):  # vetor: rasterizado ja no tamanho pedido (nitido)
@@ -529,6 +572,7 @@ class Game:
         if self.score > self.best["pontos"]:
             self.new_record = True
             save_record(self.score, self.river)
+        play("recorde" if self.new_record else "fim")
 
     def river_clear(self):
         quick = max(0, int(60 + 15 * self.river - self.river_time))  # segundos abaixo do tempo-alvo
@@ -537,6 +581,8 @@ class Game:
         self.extra_life = self.river % 3 == 0 and self.lives < LIVES_MAX
         if self.extra_life:
             self.lives += 1
+            play("vida")
+        play("rio_limpo")
         self.state, self.state_timer = "clear", 2.8
 
     def height(self):
@@ -691,6 +737,7 @@ class Game:
                 self.load += 1
                 self.belt.append(0.0)  # desce a esteira ate a cacamba
                 collected = True
+                play("oleo")
                 self.combo += 1  # manchas seguidas, sem pular nenhuma casa
                 pts = 10 * min(self.combo, 5)
                 self.add_points(pts, "+%d" % pts)
@@ -707,13 +754,17 @@ class Game:
                 if self.litter_left <= 0:
                     self.river_clear()
                     return
+                play("descarga")
         elif cell == BUOY:
+            play("batida")
             self.crash("BATEU NO CONE!")
             return
         elif cell == FISH:
+            play("batida")
             self.crash("VOCÊ MATOU UM PEIXE!")
             return
         elif cell == SPOUT:
+            play("jato")
             self.start_jump(6.0, 3.5)
         if not self.air:
             keys = pygame.key.get_pressed()
@@ -766,6 +817,7 @@ class Game:
         elif ev.key == pygame.K_SPACE and (not self.air or not self.double_used):
             if self.air:  # salto duplo: so um por pulo
                 self.double_used = True
+            play("salto_duplo" if self.air else "pulo")
             self.moving = True
             rem = self.rem_to_center()
             self.start_jump(rem + (1.0 if rem > 0.5 else 2.0), 1.4)
@@ -1444,9 +1496,15 @@ CONTROLS = [
 # creditos: (titulo da secao, [linhas]) — rolam na coluna da direita do menu
 CREDITS_TEAM = "CREATIUS GAMES"
 CREDITS = [
-    ("DESENVOLVIMENTO E ARTE", ["Felipe Neves"]),
-    ("GAME DESIGN", ["Marilia Almeida"]),
-    ("FERRAMENTAS", ["Python + pygame-ce", "Claude Code"]),
+    ("DESENVOLVIMENTO", ["Felipe Neves"]),
+    ("ARTE E INTERFACE", ["Marilia Almeida"]),
+    ("GAME DESIGN", ["Felipe Neves"]),
+    ("TEXTURA DA ÁGUA", ["brgfx - Magnific/Freepik", "(Freepik License)"]),
+    ("BOIA DE SINALIZAÇÃO", ["Nhor Phai - Flaticon", "(Flaticon License)"]),
+    ("MÚSICA", ["\"Flowerbed Fields\"", "Zane Little Music (CC0)"]),
+    ("EFEITOS SONOROS", ["Kenney - kenney.nl (CC0)", "rubberduck - OpenGameArt (CC0)",
+                         "Breviceps - Freesound (CC0)", "Universfield - Pixabay (Pixabay License)"]),
+    ("ENGINE", ["Pygame"]),
 ]
 CREDITS_SPEED = 30     # velocidade da rolagem dos creditos (px/s)
 CREDITS_VIEW = (24, 382)  # faixa da tela (topo, base) onde os creditos rolam
@@ -1486,6 +1544,7 @@ class App:
         return {"menu": self.MAIN, "gameover": self.GAMEOVER}.get(self.mode, self.PAUSE)
 
     def choose(self, option):
+        play("menu_ok")
         if option == "JOGAR":
             self.game = Game(self.screen)
             self.mode = "game"
@@ -1525,32 +1584,38 @@ class App:
                 self.credits_scroll += 40 if ev.key in (pygame.K_DOWN, pygame.K_s) else -40
             elif ev.type == pygame.KEYDOWN or (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1):
                 self.mode = "menu"
+                play("menu_ok")
             return
         if self.mode == "howto":  # qualquer tecla ou clique volta
             if ev.type == pygame.KEYDOWN or (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1):
                 self.mode = "menu"
                 self.buttons = []
+                play("menu_ok")
             return
         opts = self.options()
         if ev.type == pygame.KEYDOWN:
             if ev.key in (pygame.K_UP, pygame.K_w):
                 self.sel = (self.sel - 1) % len(opts)
+                play("menu_mover")
             elif ev.key in (pygame.K_DOWN, pygame.K_s):
                 self.sel = (self.sel + 1) % len(opts)
+                play("menu_mover")
             elif ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                 self.choose(opts[self.sel])
             elif ev.key == pygame.K_ESCAPE:
                 self.choose({"menu": "SAIR", "pause": "CONTINUAR"}.get(self.mode, "MENU PRINCIPAL"))
         elif ev.type == pygame.MOUSEMOTION:
             for i, rect in enumerate(self.buttons):
-                if rect.collidepoint(ev.pos):
+                if rect.collidepoint(ev.pos) and i != self.sel:
                     self.sel = i
+                    play("menu_mover")
         elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
             for i, rect in enumerate(self.buttons):
                 if rect.collidepoint(ev.pos):
                     self.choose(opts[i])
 
     def update(self, dt):
+        music_volume(0.4 if self.mode in ("pause", "gameover") else 1.0)  # mais baixa com o jogo parado
         if self.mode == "game":
             self.game.update(dt)
             if self.game.state == "gameover":  # acabaram os barcos: botoes de jogar de novo / menu
@@ -1771,6 +1836,7 @@ def main():
     window.size = (round(W * WINDOW_SCALE), round(H * WINDOW_SCALE))
     window.position = pygame.WINDOWPOS_CENTERED
     pygame.display.set_caption("Zero Oil")
+    init_sounds()
     clock = pygame.time.Clock()
     app = App(screen)
     while True:
