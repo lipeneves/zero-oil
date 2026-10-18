@@ -61,7 +61,7 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 
 | Arquivo | O que é | Tamanho | Observação |
 |---|---|---|---|
-| `boia.png` | Boia (obstáculo) | 96×96 | A parte de baixo (~18%) fica "dentro" da água |
+| `base/boia.svg` | Boia de sinalização (obstáculo), estilo cartoon | 96×96 | A parte de baixo (~18%) fica "dentro" da água: o flutuador é cortado em y = 79 |
 | `jato.png` | Jato d'água | 96×144 | — |
 | `base/peixe.svg` | Peixe pulando, estilo cartoon (contorno escuro, brilho e barriga clara); o jogo lê o SVG direto | 96×96 | Virado para a direita |
 | `base/peixe_nadando.svg` | Peixe debaixo d'água | 96×72 | Silhueta escura com a barbatana laranja (cartoon) para fora |

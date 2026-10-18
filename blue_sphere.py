@@ -341,7 +341,7 @@ class Game:
         if gerar_assets.missing():
             gerar_assets.generate(log=lambda msg: None)
         self.sprites = {
-            BUOY: [load_image("boia.png")],
+            BUOY: [load_image("base/boia.svg", (96, 96))],  # boia de sinalizacao
             SPOUT: [load_image("jato.png")],
             TRASH: [load_image(n) for n in ("garrafa.png", "sacola.png", "lata_vermelha.png", "lata_prateada.png")],
             FISH: [load_image("base/peixe.svg", (96, 96)), load_image("base/peixe_nadando.svg", (96, 72))],
@@ -1377,6 +1377,8 @@ class App:
         self.menu_font_sel = pygame.font.Font(font, size_sel)
         self.record_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 17)  # mais limpa
         self.credit_head_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Rubik-Bold.ttf"), 13)
+        # nome da equipe nos creditos: mesma fonte do titulo ZERO OIL
+        self.credit_team_font = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "Creepster-Regular.ttf"), 30)
         self.menu_t = 0.0
         self.sticker_cache = {}
         self.credits_img = self.credits_fade = None  # montados no primeiro desenho
@@ -1597,7 +1599,7 @@ class App:
         """Monta os creditos numa imagem alta (para rolar) e a mascara que
         apaga o texto suavemente no topo e na base da faixa."""
         max_w = 2 * (W - MENU_X) - 24  # largura da coluna, sem encostar na borda
-        rows = [(self.sticker(CREDITS_TEAM, self.menu_font_sel), 0)]
+        rows = [(self.sticker(CREDITS_TEAM, self.credit_team_font, depth=3), 0)]
         for head, lines in CREDITS:
             # titulo da secao com as cores invertidas, para separar dos nomes
             rows.append((self.sticker(head, self.credit_head_font, ink=(245, 250, 252), line=(20, 19, 24), depth=1), 30))

@@ -112,20 +112,6 @@ def make_beam():
     return s
 
 
-def make_buoy():
-    s = pygame.Surface((96, 96), pygame.SRCALPHA)
-    red, white = (215, 30, 30), (245, 245, 245)
-    pygame.draw.ellipse(s, red, (20, 64, 56, 26))
-    pygame.draw.polygon(s, red, [(26, 76), (70, 76), (62, 36), (34, 36)])
-    pygame.draw.polygon(s, white, [(30, 58), (66, 58), (64, 46), (32, 46)])
-    pygame.draw.polygon(s, red, [(38, 37), (58, 37), (48, 20)])
-    pygame.draw.line(s, (255, 130, 130), (36, 70), (39, 40), 3)
-    pygame.draw.line(s, (90, 90, 95), (48, 21), (48, 9), 3)
-    pygame.draw.circle(s, (255, 230, 80), (48, 8), 5)
-    pygame.draw.polygon(s, (120, 10, 10), [(26, 76), (70, 76), (62, 36), (34, 36)], 1)
-    return s
-
-
 def make_spout():
     s = pygame.Surface((96, 144), pygame.SRCALPHA)
     pygame.draw.ellipse(s, (200, 235, 250, 230), (12, 122, 72, 20))
@@ -849,7 +835,6 @@ def load_or(names, maker):
 
 # --- lista de tudo que o jogo usa ------------------------------------------------
 SIMPLE = {
-    "boia.png": make_buoy,
     "jato.png": make_spout,
     "garrafa.png": make_bottle,
     "sacola.png": make_bag,
