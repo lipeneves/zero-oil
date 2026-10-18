@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="144" viewBox="0 0 96 144">
+  <title>jato.svg</title>
+  <!-- jato d'agua que lanca o barco num pulo, no estilo cartoon do barco: coluna de
+       agua azul com brilho, coroa de espuma em cima, respingo na base e gotinhas,
+       com o contorno escuro da mesma grossura da boia na tela. Cada parte e
+       desenhada duas vezes: primeiro escura e mais gorda (o contorno), depois a cor
+       por cima; assim as pecas que se encostam ficam com um contorno so por fora.
+       O jogo estica a altura para o jato pulsar; a base fica em y ~ 128. -->
+
+  <!-- respingo na base -->
+  <g fill="#20242b" stroke="#20242b" stroke-width="6" stroke-linejoin="round">
+    <ellipse cx="48" cy="128" rx="30" ry="9"/>
+    <circle cx="22" cy="123" r="5"/>
+    <circle cx="74" cy="123" r="5"/>
+  </g>
+  <g fill="#a8e2ff">
+    <ellipse cx="48" cy="128" rx="30" ry="9"/>
+    <circle cx="22" cy="123" r="5"/>
+    <circle cx="74" cy="123" r="5"/>
+  </g>
+  <ellipse cx="48" cy="127" rx="19" ry="4.5" fill="#d8f4ff"/>
+
+  <!-- coluna e coroa de espuma: contorno -->
+  <g fill="#20242b" stroke="#20242b" stroke-width="6" stroke-linejoin="round">
+    <path d="M37 128 Q42 100 41 70 Q40 52 43 44 L53 44 Q56 52 55 70 Q54 100 59 128 Z"/>
+    <circle cx="48" cy="30" r="15"/>
+    <circle cx="34" cy="40" r="11"/>
+    <circle cx="62" cy="40" r="11"/>
+    <circle cx="39" cy="22" r="9"/>
+    <circle cx="57" cy="22" r="9"/>
+    <circle cx="48" cy="46" r="10"/>
+  </g>
+  <!-- coluna -->
+  <path d="M37 128 Q42 100 41 70 Q40 52 43 44 L53 44 Q56 52 55 70 Q54 100 59 128 Z" fill="#6cc6fa"/>
+  <path d="M45 124 Q46.5 95 45.5 56" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" opacity="0.8"/>
+  <!-- coroa de espuma -->
+  <g fill="#e2f6ff">
+    <circle cx="48" cy="30" r="15"/>
+    <circle cx="34" cy="40" r="11"/>
+    <circle cx="62" cy="40" r="11"/>
+    <circle cx="39" cy="22" r="9"/>
+    <circle cx="57" cy="22" r="9"/>
+    <circle cx="48" cy="46" r="10"/>
+  </g>
+  <!-- sombrinha azul embaixo da coroa e brilhos em cima -->
+  <path d="M27 44 Q34 51 41 47 Q48 53 55 47 Q62 51 69 44" fill="none" stroke="#9fd9f7" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M33 21 Q36 15 41 15" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="45" cy="24" r="2.2" fill="#ffffff"/>
+
+  <!-- gotinhas caindo -->
+  <g fill="#bfeaff" stroke="#20242b" stroke-width="2.5">
+    <circle cx="23" cy="64" r="3.6"/>
+    <circle cx="73" cy="70" r="3.6"/>
+    <circle cx="18" cy="90" r="3"/>
+    <circle cx="78" cy="96" r="3"/>
+    <circle cx="27" cy="108" r="3.2"/>
+    <circle cx="69" cy="110" r="3.2"/>
+  </g>
+</svg>

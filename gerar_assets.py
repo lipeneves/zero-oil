@@ -59,49 +59,6 @@ def visible_face(pts, center, cam):
 
 
 # --- sprites simples --------------------------------------------------------------
-def _rotated(surf, angle, size=96, center=(48, 62)):
-    out = pygame.Surface((size, size), pygame.SRCALPHA)
-    img = pygame.transform.rotate(surf, angle)
-    out.blit(img, img.get_rect(center=center))
-    return out
-
-
-def make_bottle():
-    s = pygame.Surface((110, 40), pygame.SRCALPHA)
-    pygame.draw.rect(s, (150, 220, 190, 235), (8, 6, 72, 28), border_radius=12)
-    pygame.draw.polygon(s, (150, 220, 190, 235), [(76, 9), (90, 14), (90, 26), (76, 31)])
-    pygame.draw.rect(s, (30, 90, 200), (89, 12, 11, 16), border_radius=3)
-    pygame.draw.rect(s, (245, 245, 245), (30, 6, 28, 28))
-    pygame.draw.rect(s, (220, 40, 50), (30, 15, 28, 9))
-    pygame.draw.line(s, (215, 255, 240), (14, 11), (72, 11), 3)
-    pygame.draw.rect(s, (70, 130, 110), (8, 6, 72, 28), 2, border_radius=12)
-    return _rotated(s, 25)
-
-
-def make_bag():
-    s = pygame.Surface((96, 96), pygame.SRCALPHA)
-    pygame.draw.arc(s, (150, 150, 145), (34, 14, 14, 26), 0, math.pi, 3)
-    pygame.draw.arc(s, (150, 150, 145), (50, 12, 14, 26), 0, math.pi, 3)
-    pts = [(18, 76), (12, 58), (20, 42), (34, 44), (38, 28), (50, 34), (60, 26), (66, 42),
-           (80, 46), (84, 66), (74, 80), (30, 82)]
-    pygame.draw.polygon(s, (236, 236, 228, 240), pts)
-    pygame.draw.polygon(s, (165, 165, 160), pts, 2)
-    for a, b in (((30, 52), (42, 72)), ((52, 44), (58, 70)), ((66, 54), (72, 74))):
-        pygame.draw.line(s, (195, 195, 188), a, b, 2)
-    return s
-
-
-def make_can(body=(205, 30, 40), stripe=(255, 255, 255), shine=(255, 120, 120), back=(120, 20, 25), angle=-15):
-    s = pygame.Surface((90, 40), pygame.SRCALPHA)
-    pygame.draw.rect(s, body, (8, 6, 64, 28))
-    pygame.draw.line(s, stripe, (12, 24), (66, 14), 4)
-    pygame.draw.line(s, shine, (10, 10), (70, 10), 2)
-    pygame.draw.ellipse(s, (205, 205, 215), (62, 6, 16, 28))
-    pygame.draw.ellipse(s, (150, 150, 160), (66, 11, 8, 18))
-    pygame.draw.ellipse(s, back, (2, 6, 14, 28))
-    return _rotated(s, angle)
-
-
 def make_beam():
     """Feixe de luz que marca a descarga quando a cacamba esta cheia."""
     s = pygame.Surface((32, 256), pygame.SRCALPHA)
@@ -109,18 +66,6 @@ def make_beam():
         for x in range(32):
             edge = 1 - abs(x - 15.5) / 16
             s.set_at((x, y), (255, 235, 110, int(150 * edge * (y / 255) ** 1.5)))
-    return s
-
-
-def make_spout():
-    s = pygame.Surface((96, 144), pygame.SRCALPHA)
-    pygame.draw.ellipse(s, (200, 235, 250, 230), (12, 122, 72, 20))
-    pygame.draw.polygon(s, (205, 238, 255, 230), [(36, 134), (60, 134), (55, 40), (41, 40)])
-    pygame.draw.polygon(s, (245, 252, 255, 240), [(44, 134), (52, 134), (51, 44), (45, 44)])
-    for x, y, r in ((48, 34, 14), (36, 42, 10), (60, 42, 10), (42, 24, 8), (56, 26, 8)):
-        pygame.draw.circle(s, (225, 246, 255, 240), (x, y), r)
-    for x, y in ((26, 60), (70, 66), (22, 84), (76, 90), (30, 104), (66, 110)):
-        pygame.draw.circle(s, (210, 240, 255, 220), (x, y), 3)
     return s
 
 
@@ -167,14 +112,6 @@ def make_slick(seed):
     inner = [(c + (x - c) * (1 - line / base), c + (y - c) * (1 - line / base)) for x, y in blob]
     pygame.draw.polygon(s, SLICK_FILL + (255,), inner)
     return pygame.transform.smoothscale(s, (size, size))
-
-
-def make_ripple():
-    """Anel de onda em volta do que boia (visto de cima)."""
-    s = pygame.Surface((128, 128), pygame.SRCALPHA)
-    pygame.draw.circle(s, (220, 245, 255, 210), (64, 64), 62, 7)
-    pygame.draw.circle(s, (255, 255, 255, 120), (64, 64), 50, 3)
-    return s
 
 
 def make_shadow():
@@ -835,17 +772,11 @@ def load_or(names, maker):
 
 # --- lista de tudo que o jogo usa ------------------------------------------------
 SIMPLE = {
-    "jato.png": make_spout,
-    "garrafa.png": make_bottle,
-    "sacola.png": make_bag,
-    "lata_vermelha.png": make_can,
-    "lata_prateada.png": lambda: make_can((190, 195, 205), (30, 90, 200), (240, 240, 250), (110, 115, 125), 20),
     "feixe_luz.png": make_beam,
     "mancha_1.png": lambda: make_slick(1),
     "mancha_2.png": lambda: make_slick(2),
     "mancha_3.png": lambda: make_slick(3),
     "mancha_4.png": lambda: make_slick(4),
-    "onda.png": make_ripple,
     "sombra.png": make_shadow,
     "painel.png": make_panel,
     "bussola.png": make_compass,

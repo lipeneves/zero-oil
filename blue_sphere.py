@@ -25,15 +25,17 @@ Menu: setas para cima/baixo + Enter (ou o mouse).
 Controles:
   Setas esquerda/direita  virar (no centro da proxima casa)
   Qualquer tecla          comecar a andar
-  Espaco                  pular
+  Espaco                  pular (de novo no ar: salto duplo)
   R                       recomecar a corrida na hora
   Esc                     pausar (no menu principal: sair)
 """
 import bisect
+import io
 import json
 import math
 import os
 import random
+import re
 import sys
 import warnings
 from collections import deque
@@ -45,8 +47,7 @@ WINDOW_SCALE = 1   # tamanho inicial da janela em relacao a W x H
 FPS = 60
 N = 32  # tamanho do tabuleiro (as bordas se conectam)
 
-EMPTY, OIL, BUOY, SPOUT, TRASH, DOCK, FISH, STATION = range(8)
-LITTER = (OIL, TRASH)
+EMPTY, OIL, BUOY, SPOUT, DOCK, FISH, STATION = range(7)
 
 # --- camera e chao ------------------------------------------------------------
 R = 9.0          # altura do chao no espaco 3D
@@ -66,6 +67,8 @@ WATER_COLORS = {  # (fundo, ondas); o jogo mistura as duas conforme a poluicao
     "clean": ((74, 178, 228), (124, 205, 240)),
     "dirty": ((84, 96, 58), (108, 122, 78)),
 }
+WATER_FOAM_DIRTY = (205, 212, 175)  # o branco da espuma na agua poluida
+WATER_TINT_STEPS = 24  # tons entre a agua limpa e a poluida (jato d'agua)
 
 CAM = (0.0, R + CAM_H, -CAM_B)
 CP, SP = math.cos(PITCH), math.sin(PITCH)
@@ -100,7 +103,6 @@ FISH_SCALE = 0.62     # tamanho do peixe em relacao a casa (1 = a casa toda)
 LIGHT_BLINK = 0.8     # a luz em cima do barco pisca a cada 0.8 s (acesa na primeira metade)
 LIVES_MAX = 5
 CAPACITY = 16       # itens que cabem na cacamba
-TRASH_SHARE = 0.0   # parte do lixo que e lixo boiando (0 = so manchas de oleo)
 
 # --- geometria ----------------------------------------------------------------
 def surface_point(l, f, lift=0.0):
@@ -125,7 +127,8 @@ def river_params(river):
     k = max(0, river - 2)
     return {
         "blocks": min(9, river + 1),                               # blocos de oleo: 2, 3, 4...
-        "jet": 0.0 if river < 3 else min(0.3, 0.12 + 0.03 * k),     # chance de um bloco virar jato
+        "jet": 0.0 if river < 3  # chance de um bloco virar jato (sem jatos nos rios 1 e 2)
+        else min(0.3, 0.12 + 0.03 * k),
         "cross": 0.0 if river < 2 else min(0.65, 0.25 + 0.07 * k),  # cone nos cruzamentos
         "lane": 0.0 if river < 2 else min(0.4, 0.12 + 0.05 * k),    # cone nos corredores
     }
@@ -179,11 +182,10 @@ def generate_level(river, seed=0):
         art = full
         if i > 0 and rnd.random() < prm["jet"]:  # o bloco mais perto e sempre de oleo
             art = jet
-        litter = TRASH if rnd.random() < TRASH_SHARE else OIL
         for j2, row in enumerate(art):
             for i2, ch in enumerate(row):
                 if ch != ".":
-                    g[(by + j2) % N][(bx + i2) % N] = {"o": litter, "b": BUOY, "j": SPOUT}[ch]
+                    g[(by + j2) % N][(bx + i2) % N] = {"o": OIL, "b": BUOY, "j": SPOUT}[ch]
 
     # cones so nos corredores e cruzamentos (no maximo um por trecho: sempre sobra
     # passagem), longe da largada e da estacao
@@ -242,6 +244,30 @@ def load_image(name, size=None):
     if size and img.get_size() != size:
         img = pygame.transform.smoothscale(img, size)
     return img
+
+
+def water_tinted(name, size, steps=WATER_TINT_STEPS):
+    """Um SVG desenhado nas cores da agua limpa, em steps + 1 tons que vao da agua
+    limpa (0) ate a poluida (steps): cada cor vira o tom da agua poluida com a
+    mesma claridade (do fundo da agua ate a espuma). O contorno escuro nao muda."""
+    with open(os.path.join(ASSETS_DIR, name), "rb") as fp:
+        text = fp.read().decode("utf-8")
+    base0, base1 = WATER_COLORS["clean"][0], WATER_COLORS["dirty"][0]
+    lum0 = sum(base0) / 3
+
+    def tinted(hexcolor, k):
+        rgb = [int(hexcolor[i:i + 2], 16) for i in (1, 3, 5)]
+        t = min(1.0, max(0.0, (sum(rgb) / 3 - lum0) / (255 - lum0)))  # claridade acima do fundo
+        dirty = [b + (f - b) * t for b, f in zip(base1, WATER_FOAM_DIRTY)]
+        return "#%02x%02x%02x" % tuple(round(c + (d - c) * k) for c, d in zip(rgb, dirty))
+
+    out = []
+    for i in range(steps + 1):
+        k = i / steps
+        svg = re.sub(r"#[0-9a-fA-F]{6}", lambda m: m.group(0) if m.group(0).lower() == "#20242b"
+                     else tinted(m.group(0), k), text)
+        out.append(pygame.image.load_sized_svg(io.BytesIO(svg.encode("utf-8")), size).convert_alpha())
+    return out
 
 
 def load_group(json_name):
@@ -342,15 +368,16 @@ class Game:
             gerar_assets.generate(log=lambda msg: None)
         self.sprites = {
             BUOY: [load_image("base/boia.svg", (96, 96))],  # boia de sinalizacao
-            SPOUT: [load_image("jato.png")],
-            TRASH: [load_image(n) for n in ("garrafa.png", "sacola.png", "lata_vermelha.png", "lata_prateada.png")],
+            SPOUT: water_tinted("base/jato.svg", (96, 144)),  # um tom por nivel de poluicao
             FISH: [load_image("base/peixe.svg", (96, 96)), load_image("base/peixe_nadando.svg", (96, 72))],
         }
         self.img = {n: load_image(n + ".png") for n in (
-            "onda", "sombra", "painel", "bussola", "bussola_seta",
+            "sombra", "painel", "bussola", "bussola_seta",
             "menu_painel")}
         # marcador da estacao: bolha verde com o simbolo de reciclagem e o contador "0/x"
         self.img["popup_contador"] = load_image("base/popup_contador.svg", (240, 120))
+        # anel de onda em volta do que boia: um tom por nivel de poluicao (da cor da agua)
+        self.ripples = water_tinted("base/onda.svg", (128, 128))
         self.img["coracao"] = load_image("base/coracao.svg", (28, 26))  # vidas no placar
         # minimapa: moldura redonda e a setinha do barco no meio
         self.img["minimapa"] = load_image("base/minimapa.svg", (108, 108))
@@ -424,7 +451,7 @@ class Game:
 
     def reset_level(self):
         self.grid = generate_level(self.river, self.seed)
-        self.litter_left = self.litter_total = sum(row.count(OIL) + row.count(TRASH) for row in self.grid)
+        self.litter_left = self.litter_total = sum(row.count(OIL) for row in self.grid)
         self.popup_cache = {}
         self.popup_alpha = 255.0  # o marcador some quando encosta no barco
         self.load = 0
@@ -459,6 +486,8 @@ class Game:
         self.air_dist = 0.0
         self.jump_len = 0.0
         self.jump_h = 0.0
+        self.jump_from = 0.0     # altura em que o pulo comecou (o salto duplo comeca no ar)
+        self.double_used = False  # o salto duplo ja foi usado neste pulo
         self.play_time = 0.0
         self.river_time = 0.0  # tempo andando neste rio (para o bonus de rapidez)
         self.combo = 0
@@ -510,7 +539,7 @@ class Game:
         if not self.air:
             return 0.0
         t = min(1.0, self.air_dist / self.jump_len)
-        return math.sin(math.pi * t) * self.jump_h
+        return self.jump_from * (1 - t) + math.sin(math.pi * t) * self.jump_h
 
     def rem_to_center(self):
         dx, dy = DIRS[self.dir]
@@ -528,10 +557,16 @@ class Game:
         self.turn_t = 0.0
 
     def start_jump(self, length, height):
+        """Pulo de 'length' casas (termina no centro de uma casa). No ar, e o
+        salto duplo: um novo arco a partir da altura em que o barco esta."""
+        from_h = self.height()
+        if not self.air:
+            self.double_used = False
         self.air = True
         self.air_dist = 0.0
         self.jump_len = length
         self.jump_h = height
+        self.jump_from = from_h
 
     # ---- regras ----
     def flash(self, msg, t=1.6):
@@ -658,7 +693,7 @@ class Game:
                 return
             self.air = False
         collected = False
-        if cell in LITTER:
+        if cell == OIL:
             if self.load < CAPACITY:  # cheia: passa por cima sem recolher
                 self.grid[y][x] = FISH  # o peixe que estava preso no oleo fica livre
                 self.litter_left -= 1
@@ -734,7 +769,9 @@ class Game:
             return
         if ev.key in (pygame.K_LEFT, pygame.K_RIGHT):
             self.queued = -1 if ev.key == pygame.K_LEFT else 1
-        elif ev.key == pygame.K_SPACE and not self.air:
+        elif ev.key == pygame.K_SPACE and (not self.air or not self.double_used):
+            if self.air:  # salto duplo: so um por pulo
+                self.double_used = True
             self.moving = True
             rem = self.rem_to_center()
             self.start_jump(rem + (1.0 if rem > 0.5 else 2.0), 1.4)
@@ -946,10 +983,11 @@ class Game:
         s = max(4, int(size))
         seed = cx * 7 + cy * 13
         t = self.anim
-        ripple = self.img["onda"]
+        tone = round(self.pollution() * WATER_TINT_STEPS)  # jato e ondas: da cor da agua
+        ripple = self.ripples[tone]
         if kind == SPOUT:
             h = int(s * 1.5 * (1.0 + 0.12 * math.sin(t * 9 + seed)))
-            scr.blit(self.item_sprite(SPOUT, 0, s, h), (x - s / 2, y - h + s * 0.12))
+            scr.blit(self.item_sprite(SPOUT, tone, s, h), (x - s / 2, y - h + s * 0.12))
             return
         if kind == FISH:
             # nada debaixo d'agua (barbatana de fora) e de vez em quando pula
@@ -967,12 +1005,12 @@ class Game:
                 for ex, near in ((x - d * s * 0.45, u < 0.35), (x + d * s * 0.45, u > 0.65)):
                     if near:
                         rw, rh = int(s * 0.6), int(s * 0.16)
-                        scr.blit(self.scaled(("onda",), ripple, rw, rh), (ex - rw / 2, y - rh / 2))
+                        scr.blit(self.scaled(("onda", tone), ripple, rw, rh), (ex - rw / 2, y - rh / 2))
                 scr.blit(img, img.get_rect(center=(hx, hy)))
             else:
                 sx = x + math.sin(t * 2 + seed) * s * 0.15
                 rw, rh = int(s * 0.45), int(s * 0.12)
-                scr.blit(self.scaled(("onda",), ripple, rw, rh), (sx - rw / 2, y - rh / 2))
+                scr.blit(self.scaled(("onda", tone), ripple, rw, rh), (sx - rw / 2, y - rh / 2))
                 w, h = s, int(s * 0.75)
                 img = self.item_sprite(FISH, 1, w, h)
                 if math.cos(t * 2 + seed) < 0:
@@ -984,7 +1022,7 @@ class Game:
         bob = math.sin(t * 2 + seed) * s * 0.04
         sink = int(s * 0.18)  # a parte de baixo fica "dentro" da agua
         rw, rh = int(s * 0.95), int(s * 0.28)
-        scr.blit(self.scaled(("onda",), ripple, rw, rh), (x - rw / 2, y - rh / 2 + bob))
+        scr.blit(self.scaled(("onda", tone), ripple, rw, rh), (x - rw / 2, y - rh / 2 + bob))
         scr.blit(img, (x - s / 2, y - s + sink + bob), area=pygame.Rect(0, 0, s, s - sink))
 
     def ground_turned(self, img, deg, still):
@@ -1244,7 +1282,7 @@ class Game:
             self.text(self.message, self.font, (W // 2, 170))
 
     # cores do minimapa (estilo cartoon: cada coisa e uma bolinha com contorno escuro)
-    MAP_COLORS = {OIL: (12, 12, 16), TRASH: (12, 12, 16), FISH: (255, 140, 30), BUOY: (235, 55, 55),
+    MAP_COLORS = {OIL: (12, 12, 16), FISH: (255, 140, 30), BUOY: (235, 55, 55),
                   SPOUT: (225, 248, 255), DOCK: (255, 215, 60)}
     MAP_LINE = (32, 36, 43)  # #20242b, o contorno do barco
 
@@ -1272,7 +1310,7 @@ class Game:
                     side = cs + 2 * grow
                     pygame.draw.rect(m, color, (cx - side / 2, cy - side / 2, side, side))
                 else:
-                    r = (cs * 0.75 if c in (OIL, TRASH) else cs * 0.45) + grow
+                    r = (cs * 0.75 if c == OIL else cs * 0.45) + grow
                     pygame.draw.circle(m, color, (cx, cy), r)
         if self.need_unload:  # caminho do guia ate a estacao: pontinhos claros
             for gx, gy in self.guide[1:]:
@@ -1335,6 +1373,7 @@ class Game:
 # setas, "space" a barra de espaco, e o resto e o texto escrito na tecla
 CONTROLS = [
     (["left", "right"], "virar o barco"),
+    (["space"], "pular (2x: salto duplo)"),
     (["R"], "recomeçar"),
     (["ESC"], "pausar"),
 ]

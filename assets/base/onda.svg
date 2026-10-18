@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>onda.svg</title>
+  <!-- anel de onda em volta do que boia (boias e peixes), visto de cima; o jogo
+       achata conforme a perspectiva. Desenhe nas cores da agua limpa: o jogo tinge
+       para a cor da agua poluida conforme a poluicao. -->
+  <circle cx="64" cy="64" r="58.5" fill="none" stroke="#dcf5ff" stroke-width="7" stroke-opacity="0.82"/>
+  <circle cx="64" cy="64" r="48.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-opacity="0.47"/>
+</svg>

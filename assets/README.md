@@ -62,11 +62,10 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 | Arquivo | O que é | Tamanho | Observação |
 |---|---|---|---|
 | `base/boia.svg` | Boia de sinalização (obstáculo), estilo cartoon | 96×96 | A parte de baixo (~18%) fica "dentro" da água: o flutuador é cortado em y = 79 |
-| `jato.png` | Jato d'água | 96×144 | — |
+| `base/jato.svg` | Jato d'água (lança o barco num pulo), estilo cartoon | 96×144 | Desenhe nas cores da água limpa: o jogo tinge para a cor da água poluída conforme a poluição (o contorno `#20242b` não muda). Ele estica a altura para o jato pulsar; a base fica em y ≈ 128 |
 | `base/peixe.svg` | Peixe pulando, estilo cartoon (contorno escuro, brilho e barriga clara); o jogo lê o SVG direto | 96×96 | Virado para a direita |
 | `base/peixe_nadando.svg` | Peixe debaixo d'água | 96×72 | Silhueta escura com a barbatana laranja (cartoon) para fora |
 | `feixe_luz.png` | Feixe de luz sobre a estação | 32×256 | Transparência em degradê |
-| `garrafa.png`, `sacola.png`, `lata_vermelha.png`, `lata_prateada.png` | Lixo boiando | 96×96 | Só aparecem com `TRASH_SHARE` maior que 0 |
 
 ## Coisas deitadas na água (vistas de cima)
 
@@ -74,7 +73,7 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 |---|---|---|
 | `mancha_1.png` … `mancha_4.png` | Manchas de óleo pretas com contorno escuro (geradas por `make_slick` no `gerar_assets.py`) | Pintadas na água; a imagem inteira equivale a 1 casa |
 | `base/seta_guia.svg` | Seta do caminho até a descarga | Pintada na água; desenhe apontando para cima |
-| `onda.png` | Anel de onda em volta do que boia | O jogo achata conforme a perspectiva |
+| `base/onda.svg` | Anel de onda em volta do que boia (boias e peixes) | O jogo achata conforme a perspectiva. Desenhe nas cores da água limpa: o jogo tinge para a cor da água poluída |
 | `sombra.png` | Sombra do barco no pulo | O jogo achata conforme a perspectiva |
 | `agua_limpa.png` | Água do fundo do menu | Precisa repetir sem emendas (224×224). A água do jogo é desenhada pelo código |
 
