@@ -62,6 +62,10 @@ PADS = {
 }
 STAND_SPOT = ((0, GAME_H + 134), (132, 84))  # pegadas: parado aqui, o barco sai andando
 BOAT_Y = 400        # linha da tela onde o barco encosta na agua (fora do console: 309)
+# camera do console, mais de cima (fora do console: barco a 66 graus, camera a 49):
+# (angulo de onde se ve o barco, inclinacao da camera), em graus da horizontal.
+# 90 seria visto de cima; o desenho do barco mostra um pouco da traseira.
+CAMERA_VIEW = (74, 66)
 PAD_MARGIN = 10     # folga em volta das marcacoes (a deteccao do pe nao e exata)
 LOST_AFTER = 0.5    # sem ver o jogador por este tempo (s), os pes somem da tela
 START_HOLD = 1.0    # parado nas pegadas por este tempo (s), o barco sai sozinho

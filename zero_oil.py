@@ -87,25 +87,39 @@ PLAYER_DEPTH = CAM_H * SP + CAM_B * CP  # profundidade do jogador vista pela cam
 BASE_W, BASE_H = W, H  # tamanho para o qual os menus foram desenhados (a tela do console e maior)
 
 
-def set_screen_size(width, height, boat_y=None, bottom_angle=math.radians(84)):
+def set_screen_size(width, height, boat_y=None, view=None, bottom_angle=math.radians(88)):
     """Tela maior (console T-TEA: na proporcao da tela calibrada, com espaco
-    embaixo para as marcacoes do chao). A largura a mais abre o campo de visao
-    para os lados (a lente e a mesma). O rio continua ate embaixo: a camera
-    inclina menos e recua, de modo que o barco fica na linha boat_y da tela (sem
-    ela, onde ja estava) e a ultima linha ainda olha para o chao (a bottom_angle
-    da horizontal; com a camera de antes ela passaria da vertical e veria o chao
-    atras da camera)."""
-    global W, H, PITCH, CAM_B, CAM, CP, SP, PLAYER_DEPTH, RNG, LIM
-    if boat_y is None:
-        boat = math.atan2(CAM_H, CAM_B) - PITCH  # angulo do barco abaixo do eixo da camera
-    else:
-        boat = math.atan((boat_y - Y0) / FOCAL)
+    embaixo para as marcacoes do chao); o rio continua ate embaixo.
+
+    Sem view, a camera e a lente continuam as de sempre e, com boat_y, so o
+    centro da imagem desce junto com o barco (ele fica na linha boat_y, na mesma
+    posicao em relacao ao centro).
+
+    Com view = (angulo do barco, inclinacao), em graus a partir da horizontal, a
+    camera fica mais de cima: o barco e visto daquele angulo e a camera inclina
+    tanto (menos que o angulo do barco: ele fica um pouco abaixo do centro). A
+    lente, a altura e a distancia saem das contas para o barco ficar na linha
+    boat_y, a ultima linha olhar para o chao a bottom_angle da horizontal e uma
+    casa ter, no barco, o mesmo tamanho na tela de antes (o desenho do barco foi
+    feito para esse tamanho)."""
+    global W, H, Y0, FOCAL, PITCH, CAM_H, CAM_B, CAM, CP, SP, PLAYER_DEPTH, RNG, LIM
     W, H = width, height
-    PITCH = bottom_angle - math.atan((H - Y0) / FOCAL)
-    CAM_B = CAM_H / math.tan(PITCH + boat)
-    CAM = (0.0, R + CAM_H, -CAM_B)
-    CP, SP = math.cos(PITCH), math.sin(PITCH)
-    PLAYER_DEPTH = CAM_H * SP + CAM_B * CP
+    if view is not None:
+        px_per_cell = FOCAL / PLAYER_DEPTH  # tamanho de uma casa no barco, na camera de antes
+        elev, pitch = (math.radians(a) for a in view)
+        below = math.tan(elev - pitch)  # o barco abaixo do centro da imagem (tangente)
+        FOCAL = (H - boat_y) / (math.tan(bottom_angle - pitch) - below)
+        Y0 = boat_y - FOCAL * below
+        PITCH = pitch
+        CP, SP = math.cos(PITCH), math.sin(PITCH)
+        CAM_H = FOCAL / px_per_cell / (SP + CP / math.tan(elev))
+        CAM_B = CAM_H / math.tan(elev)
+        CAM = (0.0, R + CAM_H, -CAM_B)
+        PLAYER_DEPTH = CAM_H * SP + CAM_B * CP
+    elif boat_y is not None:
+        Y0 += boat_y - project(surface_point(0, 0))[1]
+    if PITCH + math.atan((H - Y0) / FOCAL) >= math.radians(89.5):  # a ultima linha olharia atras da camera
+        raise ValueError("tela alta demais para a camera: %dx%d com o barco na linha %s" % (W, H, boat_y))
     # desenha os objetos ate os cantos de cima da tela mais larga (o laco do
     # desenho limita a uma volta do rio, que tem as bordas conectadas)
     far = floor_f(0)
@@ -2389,7 +2403,7 @@ def main():
         console = console_ttea.Console(args)
         RECORD_FILE, CONFIG_FILE = console.record_file(), console.config_file()  # por jogador
         # o rio vai ate embaixo, por baixo das marcacoes; o barco desce junto com a tela
-        set_screen_size(*console.canvas_size, console_ttea.BOAT_Y)
+        set_screen_size(*console.canvas_size, console_ttea.BOAT_Y, console_ttea.CAMERA_VIEW)
         screen = console.open_display(pygame)
     else:
         screen = open_window()
