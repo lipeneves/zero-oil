@@ -48,6 +48,11 @@ import pygame
 
 import console_ttea
 
+try:  # contas das ondas em lote (a tela larga do console tem muitos pontos); sem ele, em Python
+    import numpy as np
+except ImportError:
+    np = None
+
 W, H = 640, 480
 WINDOW_SCALE = 1   # tamanho inicial da janela em relacao a W x H
 FPS = 60
@@ -79,26 +84,33 @@ WATER_TINT_STEPS = 24  # tons entre a agua limpa e a poluida (jato d'agua)
 CAM = (0.0, R + CAM_H, -CAM_B)
 CP, SP = math.cos(PITCH), math.sin(PITCH)
 PLAYER_DEPTH = CAM_H * SP + CAM_B * CP  # profundidade do jogador vista pela camera
-BASE_H = H  # altura para a qual os menus foram desenhados (a tela do console e mais alta)
+BASE_W, BASE_H = W, H  # tamanho para o qual os menus foram desenhados (a tela do console e maior)
 
 
-def set_screen_height(height, boat_y=None, bottom_angle=math.radians(84)):
-    """Tela mais alta (console T-TEA: espaco embaixo para as marcacoes do chao).
-    O rio continua ate embaixo: a camera inclina menos e recua, de modo que o
-    barco fica na linha boat_y da tela (sem ela, onde ja estava) e a ultima
-    linha ainda olha para o chao (a bottom_angle da horizontal; com a camera de
-    antes ela passaria da vertical e veria o chao atras da camera)."""
-    global H, PITCH, CAM_B, CAM, CP, SP, PLAYER_DEPTH
+def set_screen_size(width, height, boat_y=None, bottom_angle=math.radians(84)):
+    """Tela maior (console T-TEA: na proporcao da tela calibrada, com espaco
+    embaixo para as marcacoes do chao). A largura a mais abre o campo de visao
+    para os lados (a lente e a mesma). O rio continua ate embaixo: a camera
+    inclina menos e recua, de modo que o barco fica na linha boat_y da tela (sem
+    ela, onde ja estava) e a ultima linha ainda olha para o chao (a bottom_angle
+    da horizontal; com a camera de antes ela passaria da vertical e veria o chao
+    atras da camera)."""
+    global W, H, PITCH, CAM_B, CAM, CP, SP, PLAYER_DEPTH, RNG, LIM
     if boat_y is None:
         boat = math.atan2(CAM_H, CAM_B) - PITCH  # angulo do barco abaixo do eixo da camera
     else:
         boat = math.atan((boat_y - Y0) / FOCAL)
-    H = height
+    W, H = width, height
     PITCH = bottom_angle - math.atan((H - Y0) / FOCAL)
     CAM_B = CAM_H / math.tan(PITCH + boat)
     CAM = (0.0, R + CAM_H, -CAM_B)
     CP, SP = math.cos(PITCH), math.sin(PITCH)
     PLAYER_DEPTH = CAM_H * SP + CAM_B * CP
+    # desenha os objetos ate os cantos de cima da tela mais larga (o laco do
+    # desenho limita a uma volta do rio, que tem as bordas conectadas)
+    far = floor_f(0)
+    LIM = max(LIM, math.hypot(far, floor_half(far)) + 0.5)
+    RNG = max(RNG, math.ceil(LIM))
 
 # direcoes no sentido horario: norte, leste, sul, oeste (curvas de 90 graus).
 # Para curvas de 45 graus use: [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)]
@@ -547,6 +559,8 @@ class Game:
         hf, hn = floor_half(self.f_far) + 0.3, floor_half(self.f_near) + 0.3
         self.view_box = [(-hn, self.f_near), (hn, self.f_near), (hf, self.f_far), (-hf, self.f_far)]
         self.water_bands = water_bands()
+        if np is not None:  # as mesmas ondas em arrays: (borda de cima, grossura) de cada uma
+            self.wave_arrays = [(np.array([v for v, _ in e]), np.array([t for _, t in e])) for e in self.water_bands]
         self.ground = project(surface_point(0, 0))           # onde o barco encosta na agua
         self.cache = {}      # sprites pequenos redimensionados
         self.big_cache = {}  # quadros grandes (barco no ar, estacao) redimensionados
@@ -1027,17 +1041,20 @@ class Game:
         fx, fy = math.sin(self.view), -math.cos(self.view)
         rx, ry = math.cos(self.view), math.sin(self.view)
         ipx, ipy = round(self.px), round(self.py)
-        n = 2 * RNG + 1
+        # o rio da a volta: cada casa uma vez so, mesmo com a tela larga (no maximo
+        # uma volta, centrada no barco: de -N/2 a N/2 - 1 casas)
+        n = min(2 * RNG + 1, N)
+        lo = n // 2
         lim2 = LIM * LIM
 
 
         # objetos + jogador + estacao, do mais distante para o mais proximo
         objs = []
         for tj in range(n):
-            cy = ipy - RNG + tj
+            cy = ipy - lo + tj
             grow = self.grid[cy % N]
             for ti in range(n):
-                cx = ipx - RNG + ti
+                cx = ipx - lo + ti
                 cell = grow[cx % N]
                 if cell in (EMPTY, OIL, DOCK, STATION):  # a estacao e desenhada a parte
                     continue
@@ -1240,11 +1257,12 @@ class Game:
             return (gx - self.px + N / 2) % N - N / 2, (gy - self.py + N / 2) % N - N / 2
 
         r = int(self.reach) + 1
+        n = min(2 * r + 1, N)  # o rio da a volta: cada casa uma vez so (at() acha a mais perto)
         ipx, ipy = round(self.px), round(self.py)
         slicks = self.slicks_ground
-        for cy in range(ipy - r, ipy + r + 1):
+        for cy in range(ipy - r, ipy - r + n):
             row = self.grid[cy % N]
-            for cx in range(ipx - r, ipx + r + 1):
+            for cx in range(ipx - r, ipx - r + n):
                 if row[cx % N] == OIL:
                     v = ((cx % N) * 7 + (cy % N) * 13) % len(slicks)
                     self.ground_image(slicks[v], *at(cx, cy), view)
@@ -1274,12 +1292,18 @@ class Game:
         f_min, scr = self.f_near, self.screen
         for rep in range(math.floor(vmin / p) - 1, math.floor(vmax / p) + 1):
             base = rep * p
-            for edge in self.water_bands:
+            for b, edge in enumerate(self.water_bands):
                 y0 = base + edge[0][0]
                 span = slab_span(box, y0 - 0.3, y0 + 0.6)  # a onda sobe e desce ~0,2 casa
                 if span is None:
                     continue
                 j0, j1 = math.floor(span[0] / step), math.ceil(span[1] / step)
+                if np is not None:
+                    pts = self.wave_points(b, j0, j1, base, ou, ov, ca, sa, f_min)
+                    if pts:
+                        pygame.draw.polygon(scr, color, pts)
+                        pygame.draw.aalines(scr, color, True, pts)  # borda lisa
+                    continue
                 top, bottom = [], []
                 for j in range(j0, j1 + 1):
                     v, thick = edge[j % n]
@@ -1297,6 +1321,27 @@ class Game:
                     pts.append((W / 2 + l * k, Y0 - (z * SP - CAM_H * CP) * k))
                 pygame.draw.polygon(scr, color, pts)
                 pygame.draw.aalines(scr, color, True, pts)  # borda lisa
+
+    def wave_points(self, b, j0, j1, base, ou, ov, ca, sa, f_min):
+        """O mesmo poligono da onda b que draw_waves monta em Python, com as
+        contas em lote (numpy): borda de cima, borda de baixo (de volta), o corte
+        perto da camera e a projecao na tela. Devolve os pontos ou None."""
+        n = len(self.water_bands[b])
+        tops, thicks = self.wave_arrays[b]
+        js = np.arange(j0, j1 + 1)
+        du = js * WATER_STEP - ou
+        dv = base + tops[js % n] - ov
+        dv2 = dv + thicks[js % n]
+        ls = np.concatenate((du * ca + dv * sa, (du * ca + dv2 * sa)[::-1]))
+        fs = np.concatenate((du * sa - dv * ca, (du * sa - dv2 * ca)[::-1]))
+        if fs.min() < f_min:  # passa da borda de baixo da tela: corta (poucas ondas por quadro)
+            poly = clip_near(list(zip(ls.tolist(), fs.tolist())), f_min)
+            if len(poly) < 3:
+                return None
+            ls, fs = np.array(poly).T
+        z = fs + CAM_B
+        k = FOCAL / (CAM_H * SP + z * CP)
+        return np.column_stack((W / 2 + ls * k, Y0 - (z * SP - CAM_H * CP) * k)).tolist()
 
     def draw_water(self):
         """Chao estilo "Mode 7" desenhado direto na tela: fundo liso, ondas em
@@ -1417,13 +1462,23 @@ class Game:
         best = max(self.best["pontos"], self.score)
         score = self.text_image(f"{self.score}", self.small, (255, 230, 120))
         rest = self.text_image(f"/  {best}", self.small, (220, 235, 245))
-        for i in range(self.lives):  # coracoes = vidas restantes (no alto, a esquerda)
-            scr.blit(icon, (46 + i * step, HUD_Y - icon.get_height() // 2))
-        # pontos / recorde numa linha so, alinhada a direita (espelha os coracoes)
-        rect = rest.get_rect(midright=(W - 40, HUD_Y))
-        scr.blit(rest, rect)
-        scr.blit(score, score.get_rect(midright=(rect.left - 4, rect.centery)))
-        if not self.feet_mode:  # no console o minimapa fica no lugar do numero do rio
+        if self.feet_mode:
+            # console: o minimapa no alto, no meio, com as vidas a esquerda dele e os
+            # pontos a direita, juntos perto do meio (a tela larga deixa os cantos
+            # longe do jogador); sem o numero do rio
+            gap = self.img["minimapa"].get_width() // 2 + 26
+            x0 = W // 2 - gap - (step * self.lives - 6)
+            for i in range(self.lives):
+                scr.blit(icon, (x0 + i * step, HUD_Y - icon.get_height() // 2))
+            scr.blit(score, score.get_rect(midleft=(W // 2 + gap, HUD_Y)))
+            scr.blit(rest, rest.get_rect(midleft=(W // 2 + gap + score.get_width() + 4, HUD_Y)))
+        else:
+            for i in range(self.lives):  # coracoes = vidas restantes (no alto, a esquerda)
+                scr.blit(icon, (46 + i * step, HUD_Y - icon.get_height() // 2))
+            # pontos / recorde numa linha so, alinhada a direita (espelha os coracoes)
+            rect = rest.get_rect(midright=(W - 40, HUD_Y))
+            scr.blit(rest, rect)
+            scr.blit(score, score.get_rect(midright=(rect.left - 4, rect.centery)))
             self.text(f"RIO {self.river}", self.small, (W // 2, HUD_Y))
         if self.state != "gameover":
             self.draw_minimap()
@@ -1668,7 +1723,8 @@ class App:
         self.credits_img = self.credits_fade = None  # montados no primeiro desenho
         self.credits_scroll = 0.0
         self.sound_from = "menu"  # tela que abriu a de OPÇÕES (volta para ela): menu ou pause
-        self.dy = (H - BASE_H) // 2  # menus desenhados para BASE_H: na tela mais alta, descem para o meio
+        # menus desenhados para BASE_W x BASE_H: na tela maior do console, vao para o meio
+        self.dx, self.dy = (W - BASE_W) // 2, (H - BASE_H) // 2
         self.dragging = None      # barra de volume sendo arrastada com o mouse
 
     def options(self):
@@ -1936,10 +1992,10 @@ class App:
             return
         game = self.game
         playing = game.state == "play"
-        (sx, sy), _ = console_ttea.STAND_SPOT
+        (sx, sy), _ = con.stand_spot
         img = self.floor_pad("stand", False, True)
         scr.blit(img, img.get_rect(center=(sx, sy)))
-        for name, ((x, y), _) in console_ttea.PADS.items():
+        for name, ((x, y), _) in con.pads.items():
             img = self.floor_pad(name, con.pressed[name] and playing, playing)
             scr.blit(img, img.get_rect(center=(x, y)))
         if playing and game.waiting and con.present_t > 0:  # parado nas pegadas: o anel enche e o barco sai
@@ -1957,7 +2013,7 @@ class App:
         if name == "stand":
             img = self.footprints(ink)
         else:
-            w, h = console_ttea.PADS[name][1]
+            w, h = self.console.pads[name][1]
             depth, line = 8, 3
             sink = 5 if pressed else 0  # apertada: a face desce e o relevo diminui
             face = (242, 214, 130) if pressed else (245, 250, 252) if enabled else (190, 202, 212)
@@ -2025,9 +2081,9 @@ class App:
                 scr.blit(tile, (x, y))
         if boat:
             frame = self.menu_boat[int(t * 8) % len(self.menu_boat)]
-            scr.blit(frame, (0, self.dy + round(math.sin(t * 2.2) * 3)))  # balanco na agua
+            scr.blit(frame, (self.dx, self.dy + round(math.sin(t * 2.2) * 3)))  # balanco na agua
         if title:
-            scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X, 74 + self.dy)))
+            scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X + self.dx, 74 + self.dy)))
 
     def draw_menu_button(self, label, center, sel):
         """Botao cartoon: contorno escuro e relevo embaixo; o selecionado num
@@ -2051,14 +2107,14 @@ class App:
         self.draw_menu_bg()
         self.buttons = []
         for i, label in enumerate(self.MAIN):
-            self.buttons.append(self.draw_menu_button(label, (MENU_X, 157 + i * 63 + self.dy), i == self.sel))
+            self.buttons.append(self.draw_menu_button(label, (MENU_X + self.dx, 157 + i * 63 + self.dy), i == self.sel))
         rec = load_record()
         if rec["pontos"]:
             msg = "RECORDE  %d  ·  RIO %d" % (rec["pontos"], rec["rio"])
         else:  # no console o aviso de baixo ja diz como escolher
             msg = "SEM RECORDE" if self.console else "SETAS E ENTER, OU O MOUSE"
         img = self.sticker(msg, self.record_font)
-        scr.blit(img, img.get_rect(center=(MENU_X, 418 + self.dy)))
+        scr.blit(img, img.get_rect(center=(MENU_X + self.dx, 418 + self.dy)))
 
     def draw_start_help(self):
         """Comeco da corrida: um painel escuro de cantos arredondados no alto com
@@ -2121,9 +2177,9 @@ class App:
             img = self.game.text_image("OPÇÕES", self.game.font)
         dy = self.dy
         scr.blit(img, img.get_rect(center=(W // 2, 48 + dy)))
-        left, right = 155, 452  # meio de cada coluna
+        left, right = 155 + self.dx, 452 + self.dx  # meio de cada coluna
         line = pygame.Rect(0, 0, 8, 260)  # divisoria entre as colunas: traco claro com contorno escuro
-        line.center = (296, 232 + dy)
+        line.center = (296 + self.dx, 232 + dy)
         pygame.draw.rect(scr, (32, 36, 43), line, border_radius=4)
         pygame.draw.rect(scr, (245, 250, 252), line.inflate(-4, -4), border_radius=2)
         for cx, head in ((left, "VOLUME"), (right, "CONTROLES")):
@@ -2178,9 +2234,9 @@ class App:
         view = pygame.Surface((img.get_width(), view_h), pygame.SRCALPHA)
         view.blit(img, (0, round(y)))
         view.blit(self.credits_fade, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        scr.blit(view, view.get_rect(midtop=(MENU_X, top)))
+        scr.blit(view, view.get_rect(midtop=(MENU_X + self.dx, top)))
         self.buttons = []  # qualquer tecla ou clique volta (ver handle_event)
-        self.draw_menu_button("VOLTAR", (MENU_X, 418 + self.dy), True)
+        self.draw_menu_button("VOLTAR", (MENU_X + self.dx, 418 + self.dy), True)
 
     def draw_controls(self, cx, y, step):
         """Lista de controles centrada em cx a partir de y: em cada linha as
@@ -2232,7 +2288,7 @@ class App:
     def build_credits(self):
         """Monta os creditos numa imagem alta (para rolar) e a mascara que
         apaga o texto suavemente no topo e na base da faixa."""
-        max_w = 2 * (W - MENU_X) - 24  # largura da coluna, sem encostar na borda
+        max_w = 2 * (BASE_W - MENU_X) - 24  # largura da coluna, sem encostar na borda
         rows = [(self.sticker(CREDITS_TEAM, self.credit_team_font, depth=3), 0)]
         for head, lines in CREDITS:
             # titulo da secao com as cores invertidas, para separar dos nomes
@@ -2330,10 +2386,10 @@ def main():
     pygame.init()
     console = None
     if args.player_id is not None:  # aberto pelo console T-TEA (veja console_ttea.py)
-        console = console_ttea.Console(args, W, H)
+        console = console_ttea.Console(args)
         RECORD_FILE, CONFIG_FILE = console.record_file(), console.config_file()  # por jogador
         # o rio vai ate embaixo, por baixo das marcacoes; o barco desce junto com a tela
-        set_screen_height(console.canvas_size[1], console_ttea.BOAT_Y)
+        set_screen_size(*console.canvas_size, console_ttea.BOAT_Y)
         screen = console.open_display(pygame)
     else:
         screen = open_window()

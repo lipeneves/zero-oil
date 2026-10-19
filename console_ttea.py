@@ -41,20 +41,26 @@ GAME_FOLDER = "zerooil"  # pasta dos dados do jogo dentro dos dados do T-TEA
 CONTROL_W, CONTROL_H = 640, 480  # espaco da imagem da camera em que a calibracao e feita
 PREVIEW_WINDOW = "Zero Oil - camera"
 
-# --- controle pelos pes ----------------------------------------------------------
-# No console a tela cresce PANEL_H para baixo e o rio vai junto (ver
-# zero_oil.set_screen_height): o barco desce para BOAT_Y e as marcacoes ficam
+# --- tela e controle pelos pes ----------------------------------------------------
+# Como o KarTEA, o jogo ocupa a tela calibrada inteira, na proporcao dela (sem
+# faixas pretas). O desenho tem CANVAS_H de altura e a largura que a proporcao
+# da tela pede (num projetor 16:9, 1191 x 670): o campo de visao abre para os
+# lados. O pygame amplia o desenho para a resolucao da tela. O rio vai ate
+# embaixo (ver zero_oil.set_screen_size), o barco fica em BOAT_Y e as marcacoes
 # na parte de baixo, sem cobrir o caminho do barco.
 GAME_H = 480
 PANEL_H = 190
-# marcacoes (em pixels da tela inteira): centro (x, y) e tamanho (largura, altura).
-# As setas ficam um passo (uns 50 cm numa projecao de 2,5 m) para cada lado das
-# pegadas e deixam o canto de baixo livre para o minimapa.
+CANVAS_H = GAME_H + PANEL_H
+MIN_CANVAS_W = 640    # tela mais estreita que isso (retrato): o desenho fica com faixas
+SIMULATED_SCREEN = (1280, 720)  # simulacao sem calibracao: um projetor 16:9 comum
+# marcacoes: deslocamento (x) a partir do meio da tela, altura (y) e tamanho
+# (largura, altura). As setas ficam um passo (uns 50 cm numa projecao de 2,5 m
+# de altura) para cada lado das pegadas.
 PADS = {
-    "left": ((190, GAME_H + 130), (124, 88)),
-    "right": ((450, GAME_H + 130), (124, 88)),
+    "left": ((-130, GAME_H + 130), (124, 88)),
+    "right": ((130, GAME_H + 130), (124, 88)),
 }
-STAND_SPOT = ((320, GAME_H + 134), (132, 84))  # pegadas: parado aqui, o barco sai andando
+STAND_SPOT = ((0, GAME_H + 134), (132, 84))  # pegadas: parado aqui, o barco sai andando
 BOAT_Y = 400        # linha da tela onde o barco encosta na agua (fora do console: 309)
 PAD_MARGIN = 10     # folga em volta das marcacoes (a deteccao do pe nao e exata)
 LOST_AFTER = 0.5    # sem ver o jogador por este tempo (s), os pes somem da tela
@@ -100,12 +106,13 @@ class Console:
     ----------
     args : argparse.Namespace
         Resultado de parse_args, com player_id preenchido.
-    game_w, game_h : int
-        Tamanho da tela do jogo fora do console. No console (canvas_size) ela
-        tem mais PANEL_H embaixo, para as marcacoes; o pygame amplia tudo.
+
+    canvas_size e o tamanho do desenho do jogo no console (CANVAS_H de altura,
+    na proporcao da tela calibrada); pads e stand_spot sao as marcacoes ja
+    na posicao desse desenho.
     """
 
-    def __init__(self, args, game_w, game_h):
+    def __init__(self, args):
         from ttea.model import Calibration, CalibrationPoint
         from ttea.service import CalibrationService
         from ttea.util import PathConfig
@@ -122,14 +129,17 @@ class Console:
         hw = cal.find_by_id_calibration(Calibration.ID_VALUE)
         size = cal.get_screen_size() if hw else None
         self.screen_index = hw.screen_position if hw else 0
-        self.screen_size = (size["width"], size["height"]) if size else (game_w, game_h)
+        self.screen_size = (size["width"], size["height"]) if size else SIMULATED_SCREEN
         self.fullscreen = cal.is_fullscreen() if hw else True
 
-        # tela -> jogo: o pygame amplia a tela do console mantendo a proporcao
-        # (faixas pretas nas sobras)
-        self.canvas_size = (game_w, game_h + PANEL_H)
-        cw, ch = self.canvas_size
+        # o desenho na proporcao da tela calibrada; tela -> desenho para os pes
         sw, sh = self.screen_size
+        self.canvas_size = (max(MIN_CANVAS_W, round(CANVAS_H * sw / sh)), CANVAS_H)
+        cw, ch = self.canvas_size
+        mid = cw // 2
+        self.pads = {name: ((mid + dx, y), size) for name, ((dx, y), size) in PADS.items()}
+        (dx, y), stand = STAND_SPOT
+        self.stand_spot = ((mid + dx, y), stand)
         self.scale = min(sw / cw, sh / ch)
         self.offset = ((sw - cw * self.scale) / 2, (sh - ch * self.scale) / 2)
 
@@ -169,7 +179,7 @@ class Console:
         # estado do controle pelos pes
         self.feet = []            # posicao de cada pe na tela do jogo (vazia sem jogador)
         self.pointer = None       # meio dos pes (os menus usam um ponto so), ou None
-        self.pressed = {name: False for name in PADS}  # marcacoes com um pe em cima
+        self.pressed = {name: False for name in self.pads}  # marcacoes com um pe em cima
         self.present_t = 0.0      # ha quanto tempo o jogador esta parado nas pegadas
         self.preview = True       # janela com a imagem da camera (para o profissional)
         self.preview_frame_id = -1
@@ -248,7 +258,7 @@ class Console:
         n = len(self.feet)
         self.pointer = (sum(x for x, _ in self.feet) / n, sum(y for _, y in self.feet) / n) if n else None
         commands = []
-        for name, spec in PADS.items():
+        for name, spec in self.pads.items():
             rect = pad_rect(spec, PAD_MARGIN)
             down = any(inside(rect, foot) for foot in self.feet)
             if down and not self.pressed[name]:
@@ -261,7 +271,7 @@ class Console:
     def present(self, dt):
         """True quando o jogador esta parado nas pegadas (sem pisar nas
         marcacoes) por START_HOLD."""
-        spot = pad_rect(STAND_SPOT, PAD_MARGIN)
+        spot = pad_rect(self.stand_spot, PAD_MARGIN)
         if self.pointer is None or any(self.pressed.values()) or not inside(spot, self.pointer):
             self.present_t = 0.0
         else:
