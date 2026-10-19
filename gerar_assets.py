@@ -1,6 +1,6 @@
 """Gera as imagens padrao do jogo na pasta assets/.
 
-O jogo (blue_sphere.py) so desenha imagens prontas. Este script cria a arte
+O jogo (zero_oil.py) so desenha imagens prontas. Este script cria a arte
 padrao, de duas formas:
 
   * sprites simples (boia, jato, manchas, placar...), desenhados com
@@ -25,7 +25,7 @@ import sys
 
 import pygame
 
-import blue_sphere as bs  # camera, projecao e constantes do jogo
+import zero_oil as bs  # camera, projecao e constantes do jogo
 
 ASSETS_DIR = bs.ASSETS_DIR
 BOAT_WAKE_FRAMES = 4   # quadros da animacao do barco andando (espuma)
@@ -556,7 +556,7 @@ def boat_svg_frames():
     ox = round(ax - sw / 2)  # centrado no apoio
 
     def save(text, name):  # SVG -> PNG do tamanho do quadro
-        img = pygame.image.load_sized_svg(io.BytesIO(text.encode("utf-8")), (sw, sh))
+        img = bs.load_svg(io.BytesIO(text.encode("utf-8")), (sw, sh))
         out = pygame.Surface((fw, fh), pygame.SRCALPHA)
         out.blit(img, (ox, BOAT_SVG_TOP))
         pygame.image.save(out, os.path.join(ASSETS_DIR, name))
@@ -577,7 +577,7 @@ def boat_svg_frames():
         for c in range(BOAT_WAKE_FRAMES):
             text = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="%g 0 %g %g">\n%s\n</svg>\n'
                     % (-padu, width + 2 * padu, height, _trail_svg(c / BOAT_WAKE_FRAMES, width, height, bend)))
-            img = pygame.image.load_sized_svg(io.BytesIO(text.encode("utf-8")), (sw + 2 * pad, sh))
+            img = bs.load_svg(io.BytesIO(text.encode("utf-8")), (sw + 2 * pad, sh))
             sheet.blit(img, (c * tw + ox, r * fh + BOAT_SVG_TOP))
     pygame.image.save(sheet, os.path.join(ASSETS_DIR, "rastro.png"))
 
@@ -589,7 +589,7 @@ def boat_svg_frames():
     # gota de oleo (o jogo so usa se o barco.json tiver "esteira")
     drop = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 12">'
             '<ellipse cx="8" cy="6" rx="6.5" ry="4.8" fill="%s" stroke="#20242b" stroke-width="1"/></svg>' % OIL_SVG)
-    pygame.image.save(pygame.image.load_sized_svg(io.BytesIO(drop.encode("utf-8")), (12, 9)),
+    pygame.image.save(bs.load_svg(io.BytesIO(drop.encode("utf-8")), (12, 9)),
                       os.path.join(ASSETS_DIR, "gota_oleo.png"))
 
     meta = {"arquivos": BOAT_FILES, "tamanho": [fw, fh], "apoio": list(BOAT_SVG_ANCHOR),
@@ -724,7 +724,7 @@ def make_menu_boat():
         wall, _ = _svg_shape(svg, "cacamba_parede")
         end = svg.rindex("</svg>")
         svg = svg[:end] + _bucket_svg(inner, wall, BUCKET_LEVELS, BUCKET_LEVELS) + "\n" + svg[end:]
-        img = pygame.image.load_sized_svg(io.BytesIO(svg.encode("utf-8")), (round(width * k), round(height * k)))
+        img = bs.load_svg(io.BytesIO(svg.encode("utf-8")), (round(width * k), round(height * k)))
         # gira em volta do meio do barco e poe no lugar
         mid = pygame.Vector2(width / 2, (top + bottom) / 2) * k
         off = mid - pygame.Vector2(img.get_rect().center)

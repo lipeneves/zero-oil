@@ -20,7 +20,7 @@ Para recriar **tudo**, rode `python gerar_assets.py --todos`. Atenção: isso so
 
 Use PNG com fundo transparente. A textura de água do menu é a exceção.
 
-**Água:** a água do jogo não é imagem: o fundo e as ondas são desenhados pelo código (cores em `WATER_COLORS` e formato das ondas em `water_bands`, no `blue_sphere.py`). Só o fundo do menu usa a textura `agua_limpa.png`, feita com as mesmas ondas; recrie com `python gerar_assets.py --agua`.
+**Água:** a água do jogo não é imagem: o fundo e as ondas são desenhados pelo código (cores em `WATER_COLORS` e formato das ondas em `water_bands`, no `zero_oil.py`). Só o fundo do menu usa a textura `agua_limpa.png`, feita com as mesmas ondas; recrie com `python gerar_assets.py --agua`.
 
 ## Barco (sempre visto de costas)
 
@@ -45,15 +45,15 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 
 | Arquivo | O que é | Tamanho |
 |---|---|---|
-| `base/estacao_chao.svg` | Chão da estação **visto de cima** (56 unidades = 1 casa; o jogo lê o SVG direto), estilo cartoon: em cima, a sombra da plataforma de petróleo e as ondinhas das 4 colunas (o tampo e as colunas são desenhados em 3D pelo jogo, ver `DECK_*` em `blue_sphere.py`); embaixo, a vaga de descarga (3×3 casas) | 168×252 |
-| `estacao_torre.svg` | Torre de vidro redonda antiga (não usada: o tanque de vidro agora é quadrado e desenhado em 3D pelo jogo, ver `TANK_*` em `blue_sphere.py`) | 240×500 |
+| `base/estacao_chao.svg` | Chão da estação **visto de cima** (56 unidades = 1 casa; o jogo lê o SVG direto), estilo cartoon: em cima, a sombra da plataforma de petróleo e as ondinhas das 4 colunas (o tampo e as colunas são desenhados em 3D pelo jogo, ver `DECK_*` em `zero_oil.py`); embaixo, a vaga de descarga (3×3 casas) | 168×252 |
+| `estacao_torre.svg` | Torre de vidro redonda antiga (não usada: o tanque de vidro agora é quadrado e desenhado em 3D pelo jogo, ver `TANK_*` em `zero_oil.py`) | 240×500 |
 
 **`base/estacao_chao.svg`**
 - **Como aparece:** fica deitado na água; o jogo gira junto com a câmera e estica em faixas com a perspectiva do chão.
 - **Tamanho:** equivale a 3 casas de largura por 4,5 de profundidade, com 56 unidades por casa (168×252). A 1,5 casa de cima fica embaixo da plataforma e as 3 de baixo são a vaga (quadrada). Mantenha esse tamanho ao editar.
 - **Orientação:** desenhe com a estação **para cima**. O jogo gira a imagem conforme a posição da estação no mapa.
 
-**Plataforma e tanque de vidro:** são desenhados em 3D pelo jogo (função `oil_rig` em `blue_sphere.py`), com o óleo entregue subindo dentro do tanque. O feixe de luz e o marcador de reciclagem (`popup_reciclagem.svg`) saem da tampa do tanque.
+**Plataforma e tanque de vidro:** são desenhados em 3D pelo jogo (função `oil_rig` em `zero_oil.py`), com o óleo entregue subindo dentro do tanque. O feixe de luz e o marcador de reciclagem (`popup_reciclagem.svg`) saem da tampa do tanque.
 
 **Arte vetorizada:** a torre (`estacao_torre.svg`), o chão (`base/estacao_chao.svg`) e o marcador (`popup_reciclagem.svg`) são SVGs no estilo cartoon do barco, carregados direto pelo jogo: é só editar e rodar.
 
@@ -96,7 +96,7 @@ Use PNG com fundo transparente. A textura de água do menu é a exceção.
 
 ## Sons
 
-Ficam em `sons/`, em `.ogg` (ou `.wav`). O jogo toca cada efeito pelo nome do arquivo. Para trocar um som, substitua o arquivo **com o mesmo nome**. O volume de cada efeito fica em `SOUND_VOLUME` e o da música em `MUSIC_VOLUME`, no `blue_sphere.py`. Se o computador estiver sem áudio ou faltar algum arquivo, o jogo continua sem som.
+Ficam em `sons/`, em `.ogg` (ou `.wav`). O jogo toca cada efeito pelo nome do arquivo. Para trocar um som, substitua o arquivo **com o mesmo nome**. O volume de cada efeito fica em `SOUND_VOLUME` e o da música em `MUSIC_VOLUME`, no `zero_oil.py`. Se o computador estiver sem áudio ou faltar algum arquivo, o jogo continua sem som.
 
 Todos os sons são **CC0** (domínio público), menos o `batida.wav` (licença do Pixabay, veja na tabela): dá para usar e alterar livremente, sem dar crédito. Mesmo assim, os autores estão nos créditos do jogo.
 

@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "id": "br.zerooil.zerooil",
+  "version": "1.0.0",
+
+  "runtime": {
+    "entrypoint": "zero_oil.py",
+    "view_factory": null,
+    "menu_actions": {},
+    "min_platform_version": null,
+    "python": ">=3.10",
+    "dependencies": [],
+    "required_peripherals": ["webcam", "projector"],
+    "permissions": ["camera"]
+  },
+
+  "store": {
+    "type": "game",
+    "is_free": true,
+    "license": null,
+    "required_age": 0,
+    "website": null,
+    "support_info": {
+      "url": null,
+      "email": null
+    },
+    "release_date": {
+      "coming_soon": false,
+      "date": "2026"
+    },
+    "developers": [
+      { "name": "Felipe Neves", "email": null, "website": null },
+      { "name": "Marília Almeida", "email": null, "website": null }
+    ],
+    "publishers": [],
+    "platforms": {
+      "windows": true,
+      "linux": true,
+      "mac": true
+    },
+    "genres": ["arcade", "educational", "casual"],
+    "categories": ["single_player"],
+    "tags": ["environment", "exergame"],
+    "controller_support": "full",
+    "audience": {
+      "min_age": null,
+      "max_age": null,
+      "conditions": [],
+      "skills": ["coordination", "focus", "laterality"]
+    },
+    "accessibility": [],
+    "privacy": {
+      "camera": true,
+      "stores_video": false,
+      "data_collected": ["score", "session_duration"],
+      "data_leaves_device": false,
+      "policy_url": null
+    },
+    "requirements": {},
+    "tech": {
+      "engine": "pygame",
+      "language": "python"
+    },
+    "assets": {
+      "icon": "assets/icone.png",
+      "logo": "assets/logo.png",
+      "header": null,
+      "background": null,
+      "screenshots": [],
+      "videos": []
+    },
+    "references": [],
+    "changelog_url": null,
+
+    "localization": {
+      "default": "pt_BR",
+      "supported": ["pt_BR"],
+      "pt_BR": {
+        "name": "Zero Oil",
+        "short_description": "Pilote um barco catador e limpe o óleo do rio com o corpo.",
+        "about_the_game": "Um barco limpa rios poluídos: pisando nas setas projetadas no chão, o jogador escolhe para onde o barco vira.",
+        "detailed_description": "Zero Oil é uma releitura da fase especial do Sonic 3 & Knuckles. O jogador recolhe as manchas de óleo do rio, leva a caçamba cheia até a estação de reciclagem e desvia dos peixes e dos cones. Cada rio limpo deixa o próximo um pouco mais difícil. No console, a parte de baixo da tela traz as pegadas onde o jogador fica e uma seta de cada lado para virar; nos menus, basta parar em cima de um botão.",
+        "content_notes": "Sem violência. Apenas em português.",
+        "requirements_notes": "Requer uma webcam e um projetor, com a calibração do T-TEA feita."
+      },
+      "en_US": {
+        "name": "Zero Oil",
+        "short_description": "Steer a cleanup boat and clear the oil from the river with your body.",
+        "about_the_game": "A boat cleans polluted rivers: stepping on the arrows projected on the floor, the player chooses where the boat turns.",
+        "detailed_description": "Zero Oil is a take on the Sonic 3 & Knuckles special stage. The player collects oil slicks, takes the full bucket to the recycling station and avoids fish and cones. Each clean river makes the next one a bit harder. On the console, the bottom of the screen shows footprints where the player stands and an arrow on each side to turn; in the menus, standing on a button selects it.",
+        "content_notes": "No violence. Game text in Portuguese only.",
+        "requirements_notes": "Requires a webcam and a projector, with the T-TEA calibration done."
+      },
+      "es_ES": {
+        "name": "Zero Oil",
+        "short_description": "Conduce un barco recolector y limpia el petróleo del río con el cuerpo.",
+        "about_the_game": "Un barco limpia ríos contaminados: pisando las flechas proyectadas en el suelo, el jugador elige hacia dónde gira el barco.",
+        "detailed_description": "Zero Oil es una relectura de la fase especial de Sonic 3 & Knuckles. El jugador recoge las manchas de petróleo, lleva el contenedor lleno a la estación de reciclaje y esquiva peces y conos. Cada río limpio hace el siguiente un poco más difícil. En la consola, la parte de abajo de la pantalla muestra las huellas donde se para el jugador y una flecha a cada lado para girar; en los menús, basta pararse sobre un botón.",
+        "content_notes": "Sin violencia. Textos del juego solo en portugués.",
+        "requirements_notes": "Requiere una cámara web y un proyector, con la calibración de T-TEA hecha."
+      }
+    }
+  }
+}

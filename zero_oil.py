@@ -28,6 +28,9 @@ Controles:
   Espaco                  pular (de novo no ar: salto duplo)
   R                       recomecar a corrida na hora
   Esc                     pausar (no menu principal: sair)
+
+No console T-TEA (chao interativo) o barco e controlado pelos pes: veja
+console_ttea.py. Para instalar no console: python instalar_ttea.py <pasta do T-TEA>.
 """
 import bisect
 import io
@@ -37,10 +40,13 @@ import os
 import random
 import re
 import sys
+import time
 import warnings
 from collections import deque
 
 import pygame
+
+import console_ttea
 
 W, H = 640, 480
 WINDOW_SCALE = 1   # tamanho inicial da janela em relacao a W x H
@@ -73,6 +79,26 @@ WATER_TINT_STEPS = 24  # tons entre a agua limpa e a poluida (jato d'agua)
 CAM = (0.0, R + CAM_H, -CAM_B)
 CP, SP = math.cos(PITCH), math.sin(PITCH)
 PLAYER_DEPTH = CAM_H * SP + CAM_B * CP  # profundidade do jogador vista pela camera
+BASE_H = H  # altura para a qual os menus foram desenhados (a tela do console e mais alta)
+
+
+def set_screen_height(height, boat_y=None, bottom_angle=math.radians(84)):
+    """Tela mais alta (console T-TEA: espaco embaixo para as marcacoes do chao).
+    O rio continua ate embaixo: a camera inclina menos e recua, de modo que o
+    barco fica na linha boat_y da tela (sem ela, onde ja estava) e a ultima
+    linha ainda olha para o chao (a bottom_angle da horizontal; com a camera de
+    antes ela passaria da vertical e veria o chao atras da camera)."""
+    global H, PITCH, CAM_B, CAM, CP, SP, PLAYER_DEPTH
+    if boat_y is None:
+        boat = math.atan2(CAM_H, CAM_B) - PITCH  # angulo do barco abaixo do eixo da camera
+    else:
+        boat = math.atan((boat_y - Y0) / FOCAL)
+    H = height
+    PITCH = bottom_angle - math.atan((H - Y0) / FOCAL)
+    CAM_B = CAM_H / math.tan(PITCH + boat)
+    CAM = (0.0, R + CAM_H, -CAM_B)
+    CP, SP = math.cos(PITCH), math.sin(PITCH)
+    PLAYER_DEPTH = CAM_H * SP + CAM_B * CP
 
 # direcoes no sentido horario: norte, leste, sul, oeste (curvas de 90 graus).
 # Para curvas de 45 graus use: [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)]
@@ -100,6 +126,7 @@ LIVES_START = 3       # barcos no inicio da corrida
 BELT_TIME = 0.45      # segundos que o oleo recolhido leva para descer a esteira ate a cacamba
 MAP_CELL = 6         # minimapa: pixels por casa no desenho (reduzido para 3 na tela)
 MAP_RADIUS = 44      # raio do circulo do minimapa na tela
+MAP_ALPHA_CONSOLE = 130  # no console o minimapa fica no meio do alto: semitransparente (0 a 255)
 FISH_SCALE = 0.62     # tamanho do peixe em relacao a casa (1 = a casa toda)
 LIGHT_BLINK = 0.8     # a luz em cima do barco pisca a cada 0.8 s (acesa na primeira metade)
 LIVES_MAX = 5
@@ -303,10 +330,41 @@ def music_volume(k):
         pygame.mixer.music.set_volume(MUSIC_VOLUME * k * volume["musica"])
 
 
+def load_svg(src, size):
+    """SVG (caminho ou arquivo aberto) rasterizado ja no tamanho pedido, sem
+    distorcer (como o load_sized_svg do pygame-ce). O pygame comum (o do console
+    T-TEA) nao tem essa funcao e o SDL_image dele ignora o viewBox: entao a raiz
+    ganha o tamanho pedido e o desenho vai dentro de um grupo ja escalado."""
+    if hasattr(pygame.image, "load_sized_svg"):
+        return pygame.image.load_sized_svg(src, size)
+    if hasattr(src, "read"):
+        text = src.read()
+    else:
+        with open(src, "rb") as fp:
+            text = fp.read()
+    text = text.decode("utf-8") if isinstance(text, bytes) else text
+    root = re.search(r"<svg\b[^>]*>", text)
+    box = re.search(r'viewBox="([^"]*)"', root.group(0))
+    if box:
+        x0, y0, w, h = (float(v) for v in box.group(1).replace(",", " ").split())
+    else:
+        x0 = y0 = 0.0
+        w, h = (float(re.search(r'\s%s="([\d.]+)' % k, root.group(0)).group(1)) for k in ("width", "height"))
+    sw, sh = size
+    k = min(sw / w, sh / h)  # cabe inteiro no tamanho pedido, centralizado
+    move = ((sw - w * k) / 2 - x0 * k, (sh - h * k) / 2 - y0 * k)
+    tag = re.sub(r'\s(width|height|viewBox)="[^"]*"', "", root.group(0))
+    tag = tag.replace("<svg", '<svg width="%d" height="%d" viewBox="0 0 %d %d"' % (sw, sh, sw, sh), 1)
+    group = '<g transform="translate(%.4f %.4f) scale(%.6f)">' % (move[0], move[1], k)
+    end = text.rindex("</svg>")
+    text = text[:root.start()] + tag + group + text[root.end():end] + "</g>" + text[end:]
+    return pygame.image.load(io.BytesIO(text.encode("utf-8")), "imagem.svg")
+
+
 def load_image(name, size=None):
     path = os.path.join(ASSETS_DIR, name)
     if name.endswith(".svg"):  # vetor: rasterizado ja no tamanho pedido (nitido)
-        return (pygame.image.load_sized_svg(path, size) if size else pygame.image.load(path)).convert_alpha()
+        return (load_svg(path, size) if size else pygame.image.load(path)).convert_alpha()
     img = pygame.image.load(path).convert_alpha()
     if size and img.get_size() != size:
         img = pygame.transform.smoothscale(img, size)
@@ -333,7 +391,7 @@ def water_tinted(name, size, steps=WATER_TINT_STEPS):
         k = i / steps
         svg = re.sub(r"#[0-9a-fA-F]{6}", lambda m: m.group(0) if m.group(0).lower() == "#20242b"
                      else tinted(m.group(0), k), text)
-        out.append(pygame.image.load_sized_svg(io.BytesIO(svg.encode("utf-8")), size).convert_alpha())
+        out.append(load_svg(io.BytesIO(svg.encode("utf-8")), size).convert_alpha())
     return out
 
 
@@ -499,6 +557,8 @@ class Game:
         pygame.draw.circle(mask, (255, 255, 255, 255), (4 * r, 4 * r), 4 * r)
         self.map_mask = pygame.transform.smoothscale(mask, (2 * r, 2 * r))
         self.fonts = {}
+        self.run_log = None  # chamado com (jogo, motivo) quando uma corrida acaba (console T-TEA)
+        self.feet_mode = False   # console T-TEA: os avisos falam dos pes, nao das teclas
         self.reset_run()
         if demo:  # fundo do menu: um rio mais cheio
             self.river = 5
@@ -507,6 +567,11 @@ class Game:
     # ---- estado ----
     def reset_run(self):
         """Nova corrida: rio 1, 3 barcos, 0 pontos e rios novos (seed novo)."""
+        if hasattr(self, "score"):
+            self.end_run("recomecou")
+        self.run_start = time.time()
+        self.run_saved = False
+        self.crashes = self.turns = self.jumps = 0  # para o registro da corrida
         self.river = 1
         self.lives = LIVES_START
         self.score = 0
@@ -585,8 +650,15 @@ class Game:
         if label:
             self.popups.append([label, 0.0, color])
 
+    def end_run(self, reason):
+        """Avisa o fim da corrida (uma vez so); corrida sem nenhum movimento nao conta."""
+        if self.run_log and not self.run_saved and not self.demo and (self.score or self.crashes or self.moving):
+            self.run_log(self, reason)
+        self.run_saved = True
+
     def crash(self, msg):
         self.lives -= 1
+        self.crashes += 1
         self.combo = 0
         self.fail_msg = msg
         if self.lives > 0:
@@ -598,6 +670,7 @@ class Game:
             self.new_record = True
             save_record(self.score, self.river)
         play("recorde" if self.new_record else "fim")
+        self.end_run("acabaram os barcos")
 
     def river_clear(self):
         quick = max(0, int(60 + 15 * self.river - self.river_time))  # segundos abaixo do tempo-alvo
@@ -626,6 +699,7 @@ class Game:
         return abs(self.px - round(self.px)) < 1e-9 and abs(self.py - round(self.py)) < 1e-9
 
     def start_turn(self, delta):
+        self.turns += 1
         self.dir = (self.dir + delta) % ND
         self.turn_from = self.heading
         self.turn_to = self.heading + delta * TURN_ANGLE
@@ -843,6 +917,7 @@ class Game:
             if self.air:  # salto duplo: so um por pulo
                 self.double_used = True
             play("salto_duplo" if self.air else "pulo")
+            self.jumps += 1
             self.moving = True
             rem = self.rem_to_center()
             self.start_jump(rem + (1.0 if rem > 0.5 else 2.0), 1.4)
@@ -1148,6 +1223,8 @@ class Game:
             r1 = min(ih, max(r0 + 1, math.ceil((far - f_bot) * GROUND_PPC)))
             if r0 >= r1:
                 continue
+            if r1 - r0 < 2 <= ih:  # o smoothscale do pygame comum le fora de uma fonte de 1 linha (e trava)
+                r0, r1 = (r0, r1 + 1) if r1 < ih else (r0 - 1, r1)
             k = W / (2 * half)  # px da tela por casa nesta faixa
             x0, dw = W / 2 + (l - rw / 2) * k, round(rw * k)
             if dw < 1 or x0 > W or x0 + dw < 0:
@@ -1336,19 +1413,23 @@ class Game:
             self.draw_gameover()
             return
         icon = self.img["coracao"]
-        for i in range(self.lives):  # coracoes = vidas restantes (no alto, a esquerda)
-            scr.blit(icon, (46 + i * (icon.get_width() + 6), HUD_Y - icon.get_height() // 2))
-        # pontos / recorde numa linha so, alinhada a direita (espelha os coracoes)
+        step = icon.get_width() + 6
         best = max(self.best["pontos"], self.score)
+        score = self.text_image(f"{self.score}", self.small, (255, 230, 120))
         rest = self.text_image(f"/  {best}", self.small, (220, 235, 245))
+        for i in range(self.lives):  # coracoes = vidas restantes (no alto, a esquerda)
+            scr.blit(icon, (46 + i * step, HUD_Y - icon.get_height() // 2))
+        # pontos / recorde numa linha so, alinhada a direita (espelha os coracoes)
         rect = rest.get_rect(midright=(W - 40, HUD_Y))
         scr.blit(rest, rect)
-        self.text(f"{self.score}", self.small, (rect.left - 4, rect.centery), (255, 230, 120), "midright")
-        self.text(f"RIO {self.river}", self.small, (W // 2, HUD_Y))
+        scr.blit(score, score.get_rect(midright=(rect.left - 4, rect.centery)))
+        if not self.feet_mode:  # no console o minimapa fica no lugar do numero do rio
+            self.text(f"RIO {self.river}", self.small, (W // 2, HUD_Y))
         if self.state != "gameover":
             self.draw_minimap()
         if self.state == "play" and self.combo >= 2:
-            self.text("COMBO x%d" % min(self.combo, 5), self.small, (W // 2, 116), (255, 200, 80))
+            self.text("COMBO x%d" % min(self.combo, 5), self.small, (W // 2, 140 if self.feet_mode else 116),
+                      (255, 200, 80))
         for label, age, color in self.popups:  # "+10" subindo acima do barco
             img = self.text_image(label, self.small, color).copy()  # copia: o alpha nao vai para o cache
             img.set_alpha(int(255 * min(1.0, 2.2 - 2 * age)))
@@ -1365,7 +1446,11 @@ class Game:
             self.draw_banner([(self.fail_msg, self.popup_font, (255, 140, 130)),
                               (left, self.small, (255, 255, 255))], 1.6)
         elif self.waiting and not self.paused:
-            self.text("APERTE QUALQUER TECLA PARA INICIAR", self.tiny, (W // 2, 170))
+            if self.feet_mode:
+                # no meio entre o minimapa e a proa do barco
+                self.text("FIQUE PARADO NAS PEGADAS PARA COMEÇAR", self.tiny, (W // 2, (140 + round(self.ground[1]) - 82) // 2))
+            else:
+                self.text("APERTE QUALQUER TECLA PARA INICIAR", self.tiny, (W // 2, 170))
         elif self.msg_timer > 0:
             self.text(self.message, self.font, (W // 2, 170))
 
@@ -1383,7 +1468,8 @@ class Game:
         if self.state_timer < 0.3:  # some no fim
             img = img.copy()
             img.set_alpha(int(255 * max(0.0, self.state_timer) / 0.3))
-        self.screen.blit(img, img.get_rect(center=(W // 2, 125)))
+        y = 215 if self.feet_mode else 125  # no console, abaixo do minimapa
+        self.screen.blit(img, img.get_rect(center=(W // 2, y)))
 
     def relief_text(self, lines):
         """Linhas de texto empilhadas e centradas, com o contorno cartoon e um
@@ -1482,11 +1568,23 @@ class Game:
         disc.blit(rot, (r - rot.get_width() / 2, r - rot.get_height() / 2))
         disc.blit(self.map_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         frame = self.img["minimapa"]
-        x, y = W - frame.get_width() - 10, H - frame.get_height() - 10
+        if self.feet_mode:  # console: no alto, no meio (no chao, o canto de baixo fica fora da vista)
+            x, y = (W - frame.get_width()) // 2, 10
+        else:
+            x, y = W - frame.get_width() - 10, H - frame.get_height() - 10
+        arrow = self.img["minimapa_barco"]
+        if self.feet_mode:  # console: semitransparente, para ver o que vem pela frente atras dele
+            card = pygame.Surface(frame.get_size(), pygame.SRCALPHA)
+            mid = (frame.get_width() // 2, frame.get_height() // 2)
+            card.blit(disc, disc.get_rect(center=mid))
+            card.blit(frame, (0, 0))
+            card.blit(arrow, arrow.get_rect(center=mid))
+            card.set_alpha(MAP_ALPHA_CONSOLE)
+            self.screen.blit(card, (x, y))
+            return
         center = (x + frame.get_width() // 2, y + frame.get_height() // 2)
         self.screen.blit(disc, disc.get_rect(center=center))
         self.screen.blit(frame, (x, y))
-        arrow = self.img["minimapa_barco"]
         self.screen.blit(arrow, arrow.get_rect(center=center))
 
     def draw_gameover(self):
@@ -1532,6 +1630,7 @@ CREDITS = [
 ]
 CREDITS_SPEED = 30     # velocidade da rolagem dos creditos (px/s)
 CREDITS_VIEW = (24, 382)  # faixa da tela (topo, base) onde os creditos rolam
+FEET_KEYS = {"left": pygame.K_LEFT, "right": pygame.K_RIGHT}  # marcacoes do chao -> teclas do jogo
 
 
 class App:
@@ -1542,8 +1641,12 @@ class App:
     SOUND = [("MÚSICA", "musica"), ("EFEITOS", "efeitos")]  # barras da tela OPÇÕES (+ VOLTAR)
     GAMEOVER = ["JOGAR DE NOVO", "MENU PRINCIPAL"]
 
-    def __init__(self, screen):
+    def __init__(self, screen, console=None):
         self.screen = screen
+        self.console = console  # console T-TEA (controle pelos pes), ou None so no teclado
+        self.dwell = 0.0         # tempo parado em cima do botao dwell_on (pes no console)
+        self.dwell_on = None
+        self.dwell_armed = True  # depois de escolher, os pes tem que sair dos botoes
         self.game = None
         self.mode = "menu"  # menu, credits, sound, game, pause, gameover
         self.sel = 0
@@ -1565,6 +1668,7 @@ class App:
         self.credits_img = self.credits_fade = None  # montados no primeiro desenho
         self.credits_scroll = 0.0
         self.sound_from = "menu"  # tela que abriu a de OPÇÕES (volta para ela): menu ou pause
+        self.dy = (H - BASE_H) // 2  # menus desenhados para BASE_H: na tela mais alta, descem para o meio
         self.dragging = None      # barra de volume sendo arrastada com o mouse
 
     def options(self):
@@ -1574,6 +1678,9 @@ class App:
         play("menu_ok")
         if option == "JOGAR":
             self.game = Game(self.screen)
+            if self.console:
+                self.game.run_log = self.console.save_run
+                self.game.feet_mode = True
             self.mode = "game"
         elif option == "OPÇÕES":
             self.sound_from, self.mode, self.sel = self.mode, "sound", 0
@@ -1581,20 +1688,30 @@ class App:
             self.mode = "credits"
             self.credits_scroll = 0.0
         elif option == "SAIR":
-            pygame.quit()
-            sys.exit()
+            self.quit()
         elif option == "CONTINUAR":
             self.mode = "game"
         elif option == "JOGAR DE NOVO":
             self.game.reset_run()
             self.mode = "game"
         elif option == "MENU PRINCIPAL":
+            self.game.end_run("menu")
             self.mode, self.sel = "menu", 0
+
+    def quit(self):
+        if self.game:
+            self.game.end_run("saiu")
+        if self.console:
+            self.console.close()
+        pygame.quit()
+        sys.exit()
 
     def handle_event(self, ev):
         if ev.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+            self.quit()
+        if self.console and ev.type == pygame.KEYDOWN and ev.key == pygame.K_F2:
+            self.console.toggle_preview()  # janela da camera (profissional)
+            return
         if self.mode == "game":
             if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
                 if self.game.state == "gameover":
@@ -1694,12 +1811,200 @@ class App:
         self.sel = self.options().index("OPÇÕES")
         play("menu_ok")
 
+    def update_feet(self, dt):
+        """Console T-TEA: na partida os pes viram teclas (passo para o lado vira,
+        pulo pula, parado sai andando); nos menus, parar em cima de um botao
+        por DWELL_TIME escolhe."""
+        con = self.console
+        commands = con.update(dt)
+        if self.mode != "game":
+            self.dwell_update(con.pointer, dt)
+            return
+        game = self.game
+        self.dwell, self.dwell_on, self.dwell_armed = 0.0, None, True  # na partida os pes nao estao em botao
+        for command in commands:
+            game.handle_event(pygame.event.Event(pygame.KEYDOWN, key=FEET_KEYS[command], mod=0))
+        if game.state == "play" and game.waiting:
+            if con.present(dt):  # parado em cima do barco: sai andando
+                game.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_UP, mod=0))
+        else:
+            con.present_t = 0.0
+
+    def dwell_update(self, pos, dt):
+        """Escolha pelos pes: o botao embaixo deles fica selecionado e, parado
+        ali por DWELL_TIME, e escolhido. Nos creditos e nas barras de volume
+        nao (sao para o profissional, no teclado ou no mouse)."""
+        hit = None
+        if pos is not None and self.mode != "credits":
+            for i, rect in enumerate(self.buttons):
+                if rect.inflate(16, 24).collidepoint(pos):
+                    hit = i
+            if self.mode == "sound" and hit is not None and hit < len(self.SOUND):
+                hit = None
+        if hit is None:
+            self.dwell, self.dwell_on, self.dwell_armed = 0.0, None, True
+            return
+        if not self.dwell_armed:
+            return
+        if hit != self.dwell_on:
+            self.dwell_on, self.dwell = hit, 0.0
+            if hit != self.sel:
+                self.sel = hit
+                play("menu_mover")
+        self.dwell += dt
+        if self.dwell >= console_ttea.DWELL_TIME:
+            self.dwell, self.dwell_on, self.dwell_armed = 0.0, None, False
+            if self.mode == "sound":
+                self.close_sound()
+            else:
+                self.choose(self.options()[hit])
+
+    def draw_feet(self):
+        """Marcador dos pes do jogador (console T-TEA). Na partida uma bolinha
+        por pe (as marcacoes respondem a cada pe); nos menus um marcador so, com
+        o anel que enche enquanto ele fica parado em cima de um botao."""
+        pos = self.console.pointer if self.console else None
+        if pos is None:
+            return
+        scr = self.screen
+        if self.mode == "game":
+            dot = self.smooth_dot(10, 7)
+            for fx, fy in self.console.feet:
+                scr.blit(dot, dot.get_rect(center=(round(fx), round(fy))))
+            return
+        x, y = round(pos[0]), round(pos[1])
+        if self.dwell_on is not None:
+            k = min(1.0, self.dwell / console_ttea.DWELL_TIME)
+            ring = self.smooth_ring(52, 52, k, 8)  # o furo (raio 18) encosta no marcador
+            scr.blit(ring, ring.get_rect(center=(x, y)))
+        marker = self.smooth_dot(18, 15, 5)
+        scr.blit(marker, marker.get_rect(center=(x, y)))
+
+    def smooth_dot(self, r_ink, r_face, r_mid=0):
+        """Bolinha clara com contorno escuro (e um ponto escuro no meio), desenhada
+        4x maior e reduzida: a borda fica lisa mesmo com a tela ampliada no
+        projetor. Guardada pronta."""
+        key = ("dot", r_ink, r_face, r_mid)
+        if key not in self.sticker_cache:
+            k, size = 4, 2 * r_ink + 2
+            big = pygame.Surface((size * k, size * k), pygame.SRCALPHA)
+            c = (size * k // 2, size * k // 2)
+            pygame.draw.circle(big, (32, 36, 43), c, r_ink * k)
+            pygame.draw.circle(big, (232, 242, 250), c, r_face * k)
+            if r_mid:
+                pygame.draw.circle(big, (32, 36, 43), c, r_mid * k)
+            self.sticker_cache[key] = pygame.transform.smoothscale(big, (size, size))
+        return self.sticker_cache[key]
+
+    def smooth_ring(self, w, h, progress, line=8):
+        """Anel (elipse w x h) que enche no sentido horario a partir do alto:
+        trilho escuro e a parte cheia em amarelo (como o botao selecionado).
+        Desenhado 4x maior e reduzido, para a borda ficar lisa; guardado em 48
+        passos de enchimento."""
+        steps = 48
+        n = round(min(1.0, max(0.0, progress)) * steps)
+        key = ("ring", w, h, n, line)
+        if key not in self.sticker_cache:
+            k = 4
+            big = pygame.Surface((w * k, h * k), pygame.SRCALPHA)
+            outer = big.get_rect()
+            pygame.draw.ellipse(big, (32, 36, 43), outer)
+            pygame.draw.ellipse(big, (0, 0, 0, 0), outer.inflate(-2 * line * k, -2 * line * k))  # fura o meio
+            if n:
+                cx, cy = w * k / 2, h * k / 2
+                pad = 2 * k  # a parte cheia fica dentro do trilho, com contorno dos dois lados
+                ax, ay = w * k / 2 - pad, h * k / 2 - pad
+                bx, by = ax - (line * k - 2 * pad), ay - (line * k - 2 * pad)
+                end = n / steps * math.tau
+                arc = [-math.pi / 2 + end * i / 96 for i in range(97)]
+                pts = [(cx + ax * math.cos(a), cy + ay * math.sin(a)) for a in arc]
+                pts += [(cx + bx * math.cos(a), cy + by * math.sin(a)) for a in reversed(arc)]
+                pygame.draw.polygon(big, (242, 214, 130), pts)
+            self.sticker_cache[key] = pygame.transform.smoothscale(big, (w, h))
+        return self.sticker_cache[key]
+
+    def draw_panel(self):
+        """Marcacoes do console T-TEA por cima do rio, na parte de baixo da tela
+        (o rio continua por baixo delas): as pegadas no meio e uma seta de virar
+        de cada lado. Uma seta com um pe em cima afunda e fica amarela (como o
+        botao selecionado); fora da corrida elas ficam apagadas. Nos menus, um
+        aviso de como escolher."""
+        scr, con = self.screen, self.console
+        if self.mode != "game":  # menus, pausa e fim: escolhe parando em cima de um botao
+            hint = self.sticker("PARE EM CIMA DE UM BOTÃO PARA ESCOLHER", self.record_font)
+            scr.blit(hint, hint.get_rect(center=(W // 2, H - 40)))
+            return
+        game = self.game
+        playing = game.state == "play"
+        (sx, sy), _ = console_ttea.STAND_SPOT
+        img = self.floor_pad("stand", False, True)
+        scr.blit(img, img.get_rect(center=(sx, sy)))
+        for name, ((x, y), _) in console_ttea.PADS.items():
+            img = self.floor_pad(name, con.pressed[name] and playing, playing)
+            scr.blit(img, img.get_rect(center=(x, y)))
+        if playing and game.waiting and con.present_t > 0:  # parado nas pegadas: o anel enche e o barco sai
+            ring = self.smooth_ring(124, 96, con.present_t / console_ttea.START_HOLD)
+            scr.blit(ring, ring.get_rect(center=(sx, sy)))
+
+    def floor_pad(self, name, pressed, enabled):
+        """Desenho de uma marcacao da faixa no estilo das teclas (keycap): face
+        clara, contorno escuro e relevo embaixo. Apertada, afunda (relevo menor)
+        e fica amarela; apagada, fica acinzentada. Guardado pronto."""
+        key = ("pad", name, pressed, enabled)
+        if key in self.sticker_cache:
+            return self.sticker_cache[key]
+        ink = (20, 19, 24)
+        if name == "stand":
+            img = self.footprints(ink)
+        else:
+            w, h = console_ttea.PADS[name][1]
+            depth, line = 8, 3
+            sink = 5 if pressed else 0  # apertada: a face desce e o relevo diminui
+            face = (242, 214, 130) if pressed else (245, 250, 252) if enabled else (190, 202, 212)
+            side = (176, 146, 72) if pressed else (160, 178, 190)
+            img = pygame.Surface((w, h + depth), pygame.SRCALPHA)
+            pygame.draw.rect(img, ink, (0, sink, w, h + depth - sink), border_radius=14)  # contorno
+            pygame.draw.rect(img, side, (line, sink + line, w - 2 * line, h + depth - sink - 2 * line), border_radius=11)
+            top = pygame.Rect(line, sink + line, w - 2 * line, h - 2 * line)
+            pygame.draw.rect(img, face, top, border_radius=11)
+            cx, cy = top.center
+            glyph = ink if enabled else (110, 122, 134)
+            s = -1 if name == "left" else 1  # seta grossa apontando para o lado
+            pts = [(cx + s * 32, cy), (cx + s * 4, cy - 26), (cx + s * 4, cy - 12), (cx - s * 28, cy - 12),
+                   (cx - s * 28, cy + 12), (cx + s * 4, cy + 12), (cx + s * 4, cy + 26)]
+            pygame.draw.polygon(img, glyph, pts)
+            if not enabled:
+                img.set_alpha(150)
+        self.sticker_cache[key] = img
+        return img
+
+    def footprints(self, ink):
+        """Duas pegadas (onde o jogador fica parado), desenhadas 4x maiores e
+        reduzidas para a borda ficar lisa."""
+        k = 4
+        w, h = 96, 72
+        big = pygame.Surface((w * k, h * k), pygame.SRCALPHA)
+        for sx in (-1, 1):
+            cx = w // 2 + sx * 17
+            sole = pygame.Rect(0, 0, 26, 34)
+            sole.center = (cx + sx * 2, 26)
+            heel = pygame.Rect(0, 0, 20, 20)
+            heel.center = (cx, 54)
+            for grow, color in ((3, ink), (0, (245, 250, 252))):
+                for r in (sole, heel):
+                    big_r = pygame.Rect(r.x * k, r.y * k, r.w * k, r.h * k).inflate(2 * grow * k, 2 * grow * k)
+                    pygame.draw.ellipse(big, color, big_r)
+        return pygame.transform.smoothscale(big, (w, h))
+
     def update(self, dt):
+        if self.console:
+            self.update_feet(dt)
         music_volume(0.4 if self.mode in ("pause", "gameover") else 1.0)  # mais baixa com o jogo parado
         if self.mode == "game":
             self.game.update(dt)
             if self.game.state == "gameover":  # acabaram os barcos: botoes de jogar de novo / menu
                 self.mode, self.sel = "gameover", 0
+                self.dwell_armed = False  # os pes tem que sair do lugar antes de escolher
         elif self.mode in ("menu", "credits") or (self.mode == "sound" and self.sound_from == "menu"):
             self.menu_t += dt
             if self.mode == "credits":
@@ -1720,9 +2025,9 @@ class App:
                 scr.blit(tile, (x, y))
         if boat:
             frame = self.menu_boat[int(t * 8) % len(self.menu_boat)]
-            scr.blit(frame, (0, round(math.sin(t * 2.2) * 3)))  # balanco na agua
+            scr.blit(frame, (0, self.dy + round(math.sin(t * 2.2) * 3)))  # balanco na agua
         if title:
-            scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X, 74)))
+            scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X, 74 + self.dy)))
 
     def draw_menu_button(self, label, center, sel):
         """Botao cartoon: contorno escuro e relevo embaixo; o selecionado num
@@ -1746,11 +2051,14 @@ class App:
         self.draw_menu_bg()
         self.buttons = []
         for i, label in enumerate(self.MAIN):
-            self.buttons.append(self.draw_menu_button(label, (MENU_X, 157 + i * 63), i == self.sel))
+            self.buttons.append(self.draw_menu_button(label, (MENU_X, 157 + i * 63 + self.dy), i == self.sel))
         rec = load_record()
-        msg = "RECORDE  %d  ·  RIO %d" % (rec["pontos"], rec["rio"]) if rec["pontos"] else "SETAS E ENTER, OU O MOUSE"
+        if rec["pontos"]:
+            msg = "RECORDE  %d  ·  RIO %d" % (rec["pontos"], rec["rio"])
+        else:  # no console o aviso de baixo ja diz como escolher
+            msg = "SEM RECORDE" if self.console else "SETAS E ENTER, OU O MOUSE"
         img = self.sticker(msg, self.record_font)
-        scr.blit(img, img.get_rect(center=(MENU_X, 418)))
+        scr.blit(img, img.get_rect(center=(MENU_X, 418 + self.dy)))
 
     def draw_start_help(self):
         """Comeco da corrida: um painel escuro de cantos arredondados no alto com
@@ -1811,20 +2119,21 @@ class App:
             shade_.fill((0, 15, 30, 160))
             scr.blit(shade_, (0, 0))
             img = self.game.text_image("OPÇÕES", self.game.font)
-        scr.blit(img, img.get_rect(center=(W // 2, 48)))
+        dy = self.dy
+        scr.blit(img, img.get_rect(center=(W // 2, 48 + dy)))
         left, right = 155, 452  # meio de cada coluna
         line = pygame.Rect(0, 0, 8, 260)  # divisoria entre as colunas: traco claro com contorno escuro
-        line.center = (296, 232)
+        line.center = (296, 232 + dy)
         pygame.draw.rect(scr, (32, 36, 43), line, border_radius=4)
         pygame.draw.rect(scr, (245, 250, 252), line.inflate(-4, -4), border_radius=2)
         for cx, head in ((left, "VOLUME"), (right, "CONTROLES")):
             img = self.sticker(head, self.credit_head_font, ink=(245, 250, 252), line=(20, 19, 24), depth=1)
-            scr.blit(img, img.get_rect(center=(cx, 112)))
+            scr.blit(img, img.get_rect(center=(cx, 112 + dy)))
         self.buttons = []
         for i, (label, key) in enumerate(self.SOUND):
-            self.buttons.append(self.draw_slider(label, volume[key], (left, 182 + i * 90), i == self.sel))
-        self.draw_controls(right, 165, 56)
-        self.buttons.append(self.draw_menu_button("VOLTAR", (W // 2, 418), self.sel == len(self.SOUND)))
+            self.buttons.append(self.draw_slider(label, volume[key], (left, 182 + i * 90 + dy), i == self.sel))
+        self.draw_controls(right, 165 + dy, 56)
+        self.buttons.append(self.draw_menu_button("VOLTAR", (W // 2, 418 + dy), self.sel == len(self.SOUND)))
 
     def draw_slider(self, label, value, center, sel):
         """Barra de volume no estilo dos botoes: nome em adesivo em cima, barra
@@ -1862,7 +2171,7 @@ class App:
         if self.credits_img is None:
             self.credits_img, self.credits_fade = self.build_credits()
         img = self.credits_img
-        top, bottom = CREDITS_VIEW
+        top, bottom = (y + self.dy for y in CREDITS_VIEW)
         view_h = bottom - top
         # o texto entra por baixo, sai por cima e recomeca
         y = view_h - self.credits_scroll % (img.get_height() + view_h)
@@ -1871,7 +2180,7 @@ class App:
         view.blit(self.credits_fade, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         scr.blit(view, view.get_rect(midtop=(MENU_X, top)))
         self.buttons = []  # qualquer tecla ou clique volta (ver handle_event)
-        self.draw_menu_button("VOLTAR", (MENU_X, 418), True)
+        self.draw_menu_button("VOLTAR", (MENU_X, 418 + self.dy), True)
 
     def draw_controls(self, cx, y, step):
         """Lista de controles centrada em cx a partir de y: em cada linha as
@@ -1968,6 +2277,12 @@ class App:
         return self.sticker_cache[key]
 
     def draw(self):
+        self.draw_screen()
+        if self.console:
+            self.draw_panel()
+        self.draw_feet()
+
+    def draw_screen(self):
         scr = self.screen
         if self.mode == "menu":
             self.draw_menu()
@@ -1980,7 +2295,8 @@ class App:
             return
         if self.mode in ("game", "pause", "gameover"):
             # comeco da corrida (rio 1 esperando a primeira tecla): mostra os controles
-            help_ = self.mode == "game" and self.game.waiting and self.game.river == 1
+            # (no console as marcacoes do chao ja mostram os controles)
+            help_ = self.mode == "game" and self.game.waiting and self.game.river == 1 and not self.console
             self.game.paused = self.mode == "pause" or help_  # o aviso do centro sai (vai embaixo dos controles)
             self.game.draw()
             if self.mode == "pause":
@@ -1992,21 +2308,39 @@ class App:
                 for i, label in enumerate(self.GAMEOVER):
                     self.buttons.append(self.draw_menu_button(label, (W // 2, H // 2 + 50 + i * 58), i == self.sel))
 
-def main():
-    os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "linear")  # ampliacao suave, sem serrilhado
-    pygame.init()
-    # o jogo e desenhado em W x H e o pygame amplia a janela (pode redimensionar/maximizar).
-    # O mouse e convertido sozinho.
+def open_window():
+    """Janela comum (fora do T-TEA): o jogo e desenhado em W x H e o pygame amplia
+    a janela (pode redimensionar/maximizar). O mouse e convertido sozinho."""
     screen = pygame.display.set_mode((W, H), pygame.SCALED | pygame.RESIZABLE)
+    window_cls = getattr(pygame, "Window", None)  # pygame-ce; no pygame comum fica no _sdl2
+    if window_cls is None:
+        from pygame._sdl2.video import Window as window_cls
     with warnings.catch_warnings():  # from_display_module avisa que esta obsoleto, mas funciona
         warnings.simplefilter("ignore", DeprecationWarning)
-        window = pygame.Window.from_display_module()
+        window = window_cls.from_display_module()
     window.size = (round(W * WINDOW_SCALE), round(H * WINDOW_SCALE))
     window.position = pygame.WINDOWPOS_CENTERED
+    return screen
+
+
+def main():
+    global RECORD_FILE, CONFIG_FILE
+    args = console_ttea.parse_args()
+    os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "linear")  # ampliacao suave, sem serrilhado
+    pygame.init()
+    console = None
+    if args.player_id is not None:  # aberto pelo console T-TEA (veja console_ttea.py)
+        console = console_ttea.Console(args, W, H)
+        RECORD_FILE, CONFIG_FILE = console.record_file(), console.config_file()  # por jogador
+        # o rio vai ate embaixo, por baixo das marcacoes; o barco desce junto com a tela
+        set_screen_height(console.canvas_size[1], console_ttea.BOAT_Y)
+        screen = console.open_display(pygame)
+    else:
+        screen = open_window()
     pygame.display.set_caption("Zero Oil")
     init_sounds()
     clock = pygame.time.Clock()
-    app = App(screen)
+    app = App(screen, console)
     while True:
         dt = min(clock.tick(FPS) / 1000.0, 1 / 20)
         for ev in pygame.event.get():
@@ -2014,6 +2348,8 @@ def main():
         app.update(dt)
         app.draw()
         pygame.display.flip()
+        if console:
+            console.show_preview()
 
 
 if __name__ == "__main__":

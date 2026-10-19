@@ -3,7 +3,7 @@
   <title>popup_contador.svg</title>
   <!-- marcador que flutua em cima da estacao: bolha verde com o simbolo de reciclagem
        branco a esquerda e, a direita (x 120 a 300), o contador "0/x" que o jogo escreve
-       em branco (POPUP_TEXT em blue_sphere.py). A ponta (y ~ 154) aponta para a estacao. -->
+       em branco (POPUP_TEXT em zero_oil.py). A ponta (y ~ 154) aponta para a estacao. -->
   <path d="M65 6 H255 A59 59 0 0 1 255 124 H182 L160 154 L138 124 H65 A59 59 0 0 1 65 6 Z" fill="#3fa45b" stroke="#20242b" stroke-width="6" stroke-linejoin="round"/>
   <path d="M24 50 A44 44 0 0 1 56 18 M90 18 H240" fill="none" stroke="#8fe0a0" stroke-width="8" stroke-linecap="round"/>
   <!-- simbolo de reciclagem (o mesmo do recycling.svg) -->
