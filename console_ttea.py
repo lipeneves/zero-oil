@@ -8,7 +8,7 @@ estes argumentos:
 
 Quando eles chegam, o jogo roda no "modo TTEA": tela cheia no projetor
 calibrado, recorde e opcoes por jogador, cada corrida registrada para o
-profissional e o barco controlado pelos pes, pisando nas marcacoes (PADS)
+profissional e o barco controlado pelos pes, pisando nas marcacoes (PAD_*)
 projetadas na parte de baixo da tela (o rio continua por baixo delas):
 
   Pegadas (no meio, embaixo)      ficar parado nelas comeca a andar
@@ -57,14 +57,13 @@ PANEL_H = 190
 CANVAS_H = GAME_H + PANEL_H
 MIN_CANVAS_W = 640    # tela mais estreita que isso (retrato): o desenho fica com faixas
 SIMULATED_SCREEN = (1280, 720)  # simulacao sem calibracao: um projetor 16:9 comum
-# marcacoes: deslocamento (x) a partir do meio da tela, altura (y) e tamanho
-# (largura, altura). As setas ficam um passo (uns 50 cm numa projecao de 2,5 m
-# de altura) para cada lado das pegadas.
-PADS = {
-    "left": ((-130, GAME_H + 130), (124, 88)),
-    "right": ((130, GAME_H + 130), (124, 88)),
-}
-STAND_SPOT = ((0, GAME_H + 134), (132, 84))  # pegadas: parado aqui, o barco sai andando
+# marcacoes: as setas ficam um passo (uns 50 cm numa projecao de 2,5 m de
+# altura) para cada lado das pegadas. Os valores podem mudar durante o jogo
+# (painel de ajustes, Ctrl+D): Console.layout_pads monta as posicoes de novo.
+PAD_W, PAD_H = 124, 88   # tamanho de cada seta
+PAD_GAP = 130            # distancia do meio da tela ate o meio de cada seta
+PAD_Y = GAME_H + 130     # altura do meio das setas na tela
+STAND_W, STAND_H = 132, 84  # pegadas: parado aqui, o barco sai andando (um pouco abaixo das setas)
 BOAT_Y = 400        # linha da tela onde o barco encosta na agua (na tela 640 x 480: 309)
 # camera mais de cima que a da tela 640 x 480 (barco a 66 graus, camera a 49):
 # (angulo de onde se ve o barco, inclinacao da camera), em graus da horizontal.
@@ -153,10 +152,7 @@ class Console:
         sw, sh = self.screen_size
         self.canvas_size = canvas_for(self.screen_size)
         cw, ch = self.canvas_size
-        mid = cw // 2
-        self.pads = {name: ((mid + dx, y), size) for name, ((dx, y), size) in PADS.items()}
-        (dx, y), stand = STAND_SPOT
-        self.stand_spot = ((mid + dx, y), stand)
+        self.layout_pads()
         self.scale = min(sw / cw, sh / ch)
         self.offset = ((sw - cw * self.scale) / 2, (sh - ch * self.scale) / 2)
 
@@ -200,6 +196,13 @@ class Console:
         self.present_t = 0.0      # ha quanto tempo o jogador esta parado nas pegadas
         self.preview = True       # janela com a imagem da camera (para o profissional)
         self.preview_frame_id = -1
+
+    def layout_pads(self):
+        """Posicoes das marcacoes no desenho, a partir de PAD_* e STAND_*."""
+        mid = self.canvas_size[0] // 2
+        size = (PAD_W, PAD_H)
+        self.pads = {"left": ((mid - PAD_GAP, PAD_Y), size), "right": ((mid + PAD_GAP, PAD_Y), size)}
+        self.stand_spot = ((mid, PAD_Y + 4), (STAND_W, STAND_H))
 
     # ---- arquivos ----
     def data_file(self, name):

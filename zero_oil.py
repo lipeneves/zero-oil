@@ -47,6 +47,7 @@ from collections import deque
 import pygame
 
 import console_ttea
+import painel_ajustes
 
 try:  # contas das ondas em lote (a tela larga do console tem muitos pontos); sem ele, em Python
     import numpy as np
@@ -86,6 +87,8 @@ WATER_TINT_STEPS = 24  # tons entre a agua limpa e a poluida (jato d'agua)
 CAM = (0.0, R + CAM_H, -CAM_B)
 CP, SP = math.cos(PITCH), math.sin(PITCH)
 PLAYER_DEPTH = CAM_H * SP + CAM_B * CP  # profundidade do jogador vista pela camera
+CELL_PX = FOCAL / PLAYER_DEPTH  # tamanho (px) de uma casa no barco: o desenho do barco foi feito para ele
+CAM_ZOOM = 1.0  # camera mais perto (> 1: casas e barco maiores) ou mais longe (< 1); muda com set_screen_size
 BASE_W, BASE_H = W, H  # tamanho para o qual os menus foram desenhados (a tela do console e maior)
 
 
@@ -102,12 +105,13 @@ def set_screen_size(width, height, boat_y=None, view=None, bottom_angle=math.rad
     tanto (menos que o angulo do barco: ele fica um pouco abaixo do centro). A
     lente, a altura e a distancia saem das contas para o barco ficar na linha
     boat_y, a ultima linha olhar para o chao a bottom_angle da horizontal e uma
-    casa ter, no barco, o mesmo tamanho na tela de antes (o desenho do barco foi
-    feito para esse tamanho)."""
+    casa ter, no barco, CELL_PX * CAM_ZOOM na tela (o desenho do barco foi
+    feito para CELL_PX e e ampliado junto). Pode ser chamada de novo com o jogo
+    rodando (painel de ajustes): depois, Game.setup_view."""
     global W, H, Y0, FOCAL, PITCH, CAM_H, CAM_B, CAM, CP, SP, PLAYER_DEPTH, RNG, LIM
     W, H = width, height
     if view is not None:
-        px_per_cell = FOCAL / PLAYER_DEPTH  # tamanho de uma casa no barco, na camera de antes
+        px_per_cell = CELL_PX * CAM_ZOOM
         elev, pitch = (math.radians(a) for a in view)
         below = math.tan(elev - pitch)  # o barco abaixo do centro da imagem (tangente)
         FOCAL = (H - boat_y) / (math.tan(bottom_angle - pitch) - below)
@@ -137,6 +141,8 @@ TURN_ANGLE = math.tau / ND
 SPEED_START = 4.0
 SPEED_MAX = 9.0
 SPEED_GAIN = 1 / 18  # casas/s ganhas por segundo de jogo
+SPEED_RIVER = 0.35   # casas/s a mais na largada a cada rio (a maxima sobe 0.25 / 0.35 disso)
+SPEED_RIVER_CAP = (3.0, 2.0)  # o que os rios somam, no maximo, a largada e a maxima
 TURN_TIME = 0.24     # segundos que o barco leva para virar
 TURN_SLOW = 0.55     # fracao da velocidade no centro da curva (freia antes, acelera depois)
 TURN_BRAKE = 0.5     # casas antes do centro em que o barco comeca a frear para virar
@@ -553,7 +559,6 @@ class Game:
         self.boat_frames, self.boat_meta = load_group("barco.json")  # parado, ar, andando...
         # contorno do barco na tela em relacao ao ponto onde ele encosta na agua (sem a espuma)
         ax, ay = self.boat_meta["apoio"]
-        self.boat_hull = self.boat_frames[0].get_bounding_rect().move(-round(ax), -round(ay))
         # camadas por cima do barco (se a arte tiver): oleo na cacamba, luz acesa e a gota da esteira
         meta = self.boat_meta
         self.boat_bucket = [load_image(n) for n in meta.get("cacamba", [])]
@@ -575,18 +580,12 @@ class Game:
         self.img["estacao_chao"] = load_image("base/estacao_chao.svg", (3 * ppc, 9 * ppc // 2))
         self.ground_turns = {}  # imagens do chao ja giradas para a camera parada
         self.ground_turning = (None, {})  # e para o angulo do quadro atual, durante o giro
-        # faixas da tela e o trecho do chao que aparece (com folga), em (lado, frente)
-        self.strips, self.reach = build_strips()
-        self.strip_keys = [-f_top for _, _, f_top, _, _ in self.strips]  # crescente, para o bisect
-        self.f_far, self.f_near = floor_f(0) + 0.3, floor_f(H) - 0.5
-        hf, hn = floor_half(self.f_far) + 0.3, floor_half(self.f_near) + 0.3
-        self.view_box = [(-hn, self.f_near), (hn, self.f_near), (hf, self.f_far), (-hf, self.f_far)]
         self.water_bands = water_bands()
         if np is not None:  # as mesmas ondas em arrays: (borda de cima, grossura) de cada uma
             self.wave_arrays = [(np.array([v for v, _ in e]), np.array([t for _, t in e])) for e in self.water_bands]
-        self.ground = project(surface_point(0, 0))           # onde o barco encosta na agua
         self.cache = {}      # sprites pequenos redimensionados
         self.big_cache = {}  # quadros grandes (barco no ar, estacao) redimensionados
+        self.setup_view()
         self.minimap = pygame.Surface((N * MAP_CELL, N * MAP_CELL))  # desenhado grande e reduzido
         # mascara redonda do minimapa (desenhada 4x maior e reduzida: borda lisa)
         r = MAP_RADIUS
@@ -596,10 +595,29 @@ class Game:
         self.fonts = {}
         self.run_log = None  # chamado com (jogo, motivo) quando uma corrida acaba (console TTEA)
         self.feet_mode = False   # console TTEA: os avisos falam dos pes, nao das teclas
+        self.keys_off = False    # painel de ajustes aberto: as setas seguradas nao viram o barco
         self.reset_run()
         if demo:  # fundo do menu: um rio mais cheio
             self.river = 5
             self.reset_level()
+
+    def setup_view(self):
+        """O que sai da camera: faixas da tela, o trecho do chao que aparece (com
+        folga, em (lado, frente)) e onde o barco encosta na agua. De novo a cada
+        set_screen_size (barco em outra linha, zoom)."""
+        self.strips, self.reach = build_strips()
+        self.strip_keys = [-f_top for _, _, f_top, _, _ in self.strips]  # crescente, para o bisect
+        self.f_far, self.f_near = floor_f(0) + 0.3, floor_f(H) - 0.5
+        hf, hn = floor_half(self.f_far) + 0.3, floor_half(self.f_near) + 0.3
+        self.view_box = [(-hn, self.f_near), (hn, self.f_near), (hf, self.f_far), (-hf, self.f_far)]
+        self.ground = project(surface_point(0, 0))  # onde o barco encosta na agua
+        # contorno do barco na tela em relacao a esse ponto (sem a espuma), no zoom da camera
+        ax, ay = self.boat_meta["apoio"]
+        hull = self.boat_frames[0].get_bounding_rect().move(-round(ax), -round(ay))
+        self.boat_hull = pygame.Rect(round(hull.x * CAM_ZOOM), round(hull.y * CAM_ZOOM),
+                                     round(hull.w * CAM_ZOOM), round(hull.h * CAM_ZOOM))
+        self.ground_turns.clear()
+        self.big_cache.clear()
 
     # ---- estado ----
     def reset_run(self):
@@ -677,8 +695,9 @@ class Game:
     @property
     def speed(self):
         """Comeca mais rapido e chega mais longe a cada rio; acelera com o tempo."""
-        start = min(7.0, SPEED_START + 0.35 * (self.river - 1))
-        top = min(11.0, SPEED_MAX + 0.25 * (self.river - 1))
+        rivers = self.river - 1
+        start = SPEED_START + min(SPEED_RIVER_CAP[0], SPEED_RIVER * rivers)
+        top = SPEED_MAX + min(SPEED_RIVER_CAP[1], SPEED_RIVER * 0.25 / 0.35 * rivers)
         return min(top, start + self.play_time * SPEED_GAIN)
 
     # ---- pontos, barcos e fim da corrida ----
@@ -903,8 +922,7 @@ class Game:
             play("jato")
             self.start_jump(6.0, 3.5)
         if not self.air:
-            keys = pygame.key.get_pressed()
-            turn = self.queued or (keys[pygame.K_RIGHT] - keys[pygame.K_LEFT])
+            turn = self.queued or self.held_turn()
             if turn:
                 self.queued = 0
                 self.start_turn(turn)
@@ -1021,11 +1039,17 @@ class Game:
             return t * t * (3 - 2 * t)
         after = smooth(self.since_turn / TURN_RECOVER)
         before = 1.0
-        if not self.air:
-            keys = pygame.key.get_pressed()
-            if self.queued or keys[pygame.K_RIGHT] != keys[pygame.K_LEFT]:
-                before = smooth(self.rem_to_center() / TURN_BRAKE)
+        if not self.air and (self.queued or self.held_turn()) and TURN_BRAKE > 0:
+            before = smooth(self.rem_to_center() / TURN_BRAKE)
         return TURN_SLOW + (1 - TURN_SLOW) * min(after, before)
+
+    def held_turn(self):
+        """Seta segurada: -1 esquerda, 1 direita, 0 nenhuma (ou as duas). Com o
+        painel de ajustes aberto as setas sao dele."""
+        if self.keys_off:
+            return 0
+        keys = pygame.key.get_pressed()
+        return keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]
 
     # ---- desenho ----
     def item_sprite(self, kind, variant, w, h=None):
@@ -1441,12 +1465,15 @@ class Game:
                 x, y, w, h = fs
                 scr.blit(self.scaled(("sombra",), self.img["sombra"], w, h), (x - w / 2, y - h / 2))
             q = project(surface_point(0, 0, self.height()))
-            k = PLAYER_DEPTH / q[2]  # mais perto da camera = maior (tamanho exato: sem tremer)
+            k = PLAYER_DEPTH / q[2] * CAM_ZOOM  # mais perto da camera = maior (tamanho exato: sem tremer)
             w, h = round(frame.get_width() * k), round(frame.get_height() * k)
             img = pygame.transform.smoothscale(frame, (w, h))  # muda a cada quadro (luz, cacamba)
             scr.blit(img, (round(q[0] - ax * w / frame.get_width()), round(q[1] - ay * h / frame.get_height())))
         else:
-            bob = math.sin(self.anim * 3.1) * 2.5
+            if CAM_ZOOM != 1:  # camera mais perto ou mais longe: o barco acompanha as casas
+                w, h = round(frame.get_width() * CAM_ZOOM), round(frame.get_height() * CAM_ZOOM)
+                frame, ax, ay = pygame.transform.smoothscale(frame, (w, h)), ax * CAM_ZOOM, ay * CAM_ZOOM
+            bob = math.sin(self.anim * 3.1) * 2.5 * CAM_ZOOM
             scr.blit(frame, (gx - ax, gy - ay + bob))
 
     def text_image(self, msg, font, color=(255, 255, 255)):
@@ -1752,6 +1779,9 @@ class App:
         # menus desenhados para BASE_W x BASE_H: na tela maior do console, vao para o meio
         self.dx, self.dy = (W - BASE_W) // 2, (H - BASE_H) // 2
         self.dragging = None      # barra de volume sendo arrastada com o mouse
+        # Ctrl+D: painel para mudar velocidade, curvas, marcacoes... com o jogo rodando
+        saved = console.data_file("ajustes.json") if console else os.path.join(console_ttea.GAME_DIR, "ajustes.json")
+        self.panel = painel_ajustes.Panel(self, sys.modules[__name__], console_ttea, saved)
 
     def options(self):
         return {"menu": self.MAIN, "gameover": self.GAMEOVER}.get(self.mode, self.PAUSE)
@@ -1792,6 +1822,11 @@ class App:
     def handle_event(self, ev):
         if ev.type == pygame.QUIT:
             self.quit()
+        if ev.type == pygame.KEYDOWN and ev.key == pygame.K_d and ev.mod & pygame.KMOD_CTRL:
+            self.panel.toggle()
+            return
+        if self.panel.open and self.panel.handle_event(ev):  # aberto, o teclado e dele
+            return
         if self.console and ev.type == pygame.KEYDOWN and ev.key == pygame.K_F2:
             self.console.toggle_preview()  # janela da camera (profissional)
             return
@@ -1950,7 +1985,15 @@ class App:
         self.dwell, self.dwell_on, self.dwell_armed = 0.0, None, True
         if self.game:
             self.game.feet_mode = self.feet
+        self.panel.apply()  # cada controle tem o seu perfil de ajustes
         play("menu_ok")
+
+    def relayout(self):
+        """Barco em outra linha da tela ou camera mais perto/longe (painel de
+        ajustes): a camera e o chao da partida sao montados de novo."""
+        set_screen_size(W, H, console_ttea.BOAT_Y, console_ttea.CAMERA_VIEW)
+        if self.game:
+            self.game.setup_view()
 
     def close_sound(self):
         save_config()
@@ -2084,14 +2127,14 @@ class App:
             return
         game = self.game
         playing = game.state == "play"
-        (sx, sy), _ = con.stand_spot
+        (sx, sy), (stand_w, stand_h) = con.stand_spot
         img = self.floor_pad("stand", False, True)
         scr.blit(img, img.get_rect(center=(sx, sy)))
         for name, ((x, y), _) in con.pads.items():
             img = self.floor_pad(name, con.pressed[name] and playing, playing)
             scr.blit(img, img.get_rect(center=(x, y)))
         if playing and game.waiting and con.present_t > 0:  # parado nas pegadas: o anel enche e o barco sai
-            ring = self.smooth_ring(124, 96, con.present_t / console_ttea.START_HOLD)
+            ring = self.smooth_ring(stand_w - 8, stand_h + 12, con.present_t / console_ttea.START_HOLD)
             scr.blit(ring, ring.get_rect(center=(sx, sy)))
 
     def floor_pad(self, name, pressed, enabled):
@@ -2102,8 +2145,9 @@ class App:
         if key in self.sticker_cache:
             return self.sticker_cache[key]
         ink = (20, 19, 24)
-        if name == "stand":
-            img = self.footprints(ink)
+        if name == "stand":  # as pegadas acompanham a area delas (desenhadas para 132 x 84)
+            _, (w, h) = self.console.stand_spot
+            img = pygame.transform.smoothscale(self.footprints(ink), (round(w * 96 / 132), round(h * 72 / 84)))
         else:
             w, h = self.console.pads[name][1]
             depth, line = 8, 3
@@ -2118,9 +2162,9 @@ class App:
             cx, cy = top.center
             glyph = ink if enabled else (110, 122, 134)
             s = -1 if name == "left" else 1  # seta grossa apontando para o lado
-            pts = [(cx + s * 32, cy), (cx + s * 4, cy - 26), (cx + s * 4, cy - 12), (cx - s * 28, cy - 12),
-                   (cx - s * 28, cy + 12), (cx + s * 4, cy + 12), (cx + s * 4, cy + 26)]
-            pygame.draw.polygon(img, glyph, pts)
+            k = min(w / 124, h / 88)  # a seta acompanha o tamanho da marcacao (desenhada para 124 x 88)
+            pts = [(32, 0), (4, -26), (4, -12), (-28, -12), (-28, 12), (4, 12), (4, 26)]
+            pygame.draw.polygon(img, glyph, [(cx + s * x * k, cy + y * k) for x, y in pts])
             if not enabled:
                 img.set_alpha(150)
         self.sticker_cache[key] = img
@@ -2145,6 +2189,12 @@ class App:
         return pygame.transform.smoothscale(big, (w, h))
 
     def update(self, dt):
+        if self.game:
+            self.game.keys_off = self.panel.open
+        if self.panel.frozen:  # pausado pelo painel: so as marcacoes acendem com os pes
+            if self.feet:
+                self.console.update(dt)
+            return
         if self.feet:
             self.update_feet(dt)
         music_volume(0.4 if self.mode in ("pause", "gameover") else 1.0)  # mais baixa com o jogo parado
@@ -2455,6 +2505,7 @@ class App:
         if self.feet:
             self.draw_panel()
             self.draw_feet()
+        self.panel.draw(self.screen)
 
     def draw_screen(self):
         scr = self.screen

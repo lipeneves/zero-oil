@@ -83,6 +83,36 @@ pise de novo.
 Teclado e mouse continuam funcionando para o profissional. Em
 **OPÇÕES → CONTROLE** dá para trocar entre CONSOLE TTEA e TECLADO.
 
+## Painel de ajustes (Ctrl+D)
+
+Durante o jogo (ou nos menus), **Ctrl+D** abre um painel para mudar parâmetros
+na hora, sem mexer no código:
+
+- **JOGO:** velocidade inicial e máxima, aceleração, quanto cada rio acelera,
+  tempo da curva, quanto o barco freia e demora para retomar, câmera seguindo,
+  zoom da câmera (mais perto ou mais longe), linha do barco na tela (mais
+  para cima, longe das setas) e barcos no início. Tem **um perfil para cada controle** (TECLADO e PÉS), porque com os
+  pés o jogador reage mais devagar. Vale o perfil do controle em uso.
+- **CONSOLE** (só no console ou com `--simular-pes`): tamanho e altura das
+  setas, distância delas até o meio, tamanho das pegadas, folga da detecção e os
+  tempos (parado para sair, parado para escolher, pés somem sem ver).
+
+| Tecla | O que faz |
+| --- | --- |
+| Setas cima/baixo | escolher o parâmetro |
+| Setas lados | mudar (com Shift: 5 passos) |
+| Del / Backspace | voltar ao padrão (com Shift: a seção inteira) |
+| P | pausar / continuar o jogo |
+| Tab | trocar entre pés e teclado (e o perfil), só no console |
+| Ctrl+D | fechar |
+
+Com o painel aberto, o teclado controla o painel; os pés (ou o mouse da
+simulação) continuam jogando. Os valores fora do padrão ficam em amarelo e são
+gravados em `ajustes.json`, com o nome da constante do código, e voltam na
+próxima vez. No T-TEA esse arquivo fica na pasta de dados do jogo, junto do
+`zerooil.log`. Quando achar bons valores, passe-os para as constantes em
+`zero_oil.py` / `console_ttea.py`.
+
 ## Problemas comuns
 
 | Problema | O que fazer |

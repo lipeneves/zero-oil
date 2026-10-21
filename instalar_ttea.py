@@ -13,7 +13,7 @@ import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FILES = ["zero_oil.py", "gerar_assets.py", "console_ttea.py", "metadata.json"]
+FILES = ["zero_oil.py", "gerar_assets.py", "console_ttea.py", "painel_ajustes.py", "metadata.json"]
 OLD_FILES = ["blue_sphere.py"]  # nomes antigos: apagados de uma instalacao anterior
 FOLDER = "zerooil"
 
