@@ -25,12 +25,12 @@ Menu: setas para cima/baixo + Enter (ou o mouse).
 Controles:
   Setas esquerda/direita  virar (no centro da proxima casa)
   Qualquer tecla          comecar a andar
-  Espaco                  pular (de novo no ar: salto duplo)
+  Espaco                  pular (de novo no ar: salto duplo; so fora do console TTEA)
   R                       recomecar a corrida na hora
   Esc                     pausar (no menu principal: sair)
 
-No console T-TEA (chao interativo) o barco e controlado pelos pes: veja
-console_ttea.py. Para instalar no console: python instalar_ttea.py <pasta do T-TEA>.
+No console TTEA (chao interativo) o barco e controlado pelos pes: veja
+console_ttea.py. Para instalar no console: python instalar_ttea.py <pasta do TTEA>.
 """
 import bisect
 import io
@@ -54,7 +54,9 @@ except ImportError:
     np = None
 
 W, H = 640, 480
-WINDOW_SCALE = 1   # tamanho inicial da janela em relacao a W x H
+WINDOW_FILL = 0.9  # janela maior que esta fracao do monitor nao cabe (barras de titulo e de tarefas): maximiza
+RESOLUTION_HEIGHTS = (720, 900, 1080, 1440, 2160)  # alturas das janelas da tela OPÇÕES
+DEFAULT_RESOLUTION = "1191 x 670"  # janela da primeira vez (sem config.json com outra escolha)
 FPS = 60
 N = 32  # tamanho do tabuleiro (as bordas se conectam)
 
@@ -88,7 +90,7 @@ BASE_W, BASE_H = W, H  # tamanho para o qual os menus foram desenhados (a tela d
 
 
 def set_screen_size(width, height, boat_y=None, view=None, bottom_angle=math.radians(88)):
-    """Tela maior (console T-TEA: na proporcao da tela calibrada, com espaco
+    """Tela maior (console TTEA: na proporcao da tela calibrada, com espaco
     embaixo para as marcacoes do chao); o rio continua ate embaixo.
 
     Sem view, a camera e a lente continuam as de sempre e, com boat_y, so o
@@ -297,6 +299,8 @@ MUSIC_VOLUME = 0.22
 sounds = {}
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 volume = {"musica": 1.0, "efeitos": 1.0}  # niveis da tela OPÇÕES (0 a 1), por cima dos volumes acima
+# janela da tela OPÇÕES fora do TTEA: resolucao "L x A" e tela cheia
+config = {"resolucao": DEFAULT_RESOLUTION, "tela_cheia": False}
 
 
 def load_config():
@@ -305,6 +309,11 @@ def load_config():
             cfg = json.load(fp)
         for key in volume:
             volume[key] = min(1.0, max(0.0, float(cfg.get(key, volume[key]))))
+        if isinstance(cfg.get("resolucao"), str):
+            config["resolucao"] = cfg["resolucao"]
+        config["tela_cheia"] = bool(cfg.get("tela_cheia", False))
+        if config["resolucao"] == "TELA CHEIA":  # versao em que a tela cheia era uma das resolucoes
+            config["resolucao"], config["tela_cheia"] = None, True
     except (OSError, ValueError, AttributeError):
         pass
 
@@ -312,7 +321,7 @@ def load_config():
 def save_config():
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as fp:
-            json.dump(volume, fp)
+            json.dump({**volume, **config}, fp)
     except OSError:
         pass
 
@@ -320,7 +329,6 @@ def save_config():
 def init_sounds():
     """Liga o audio e carrega os efeitos. Sem placa de som (ou sem os arquivos)
     o jogo segue mudo, sem erro."""
-    load_config()
     try:
         pygame.mixer.init()
         pygame.mixer.set_num_channels(16)
@@ -359,7 +367,7 @@ def music_volume(k):
 def load_svg(src, size):
     """SVG (caminho ou arquivo aberto) rasterizado ja no tamanho pedido, sem
     distorcer (como o load_sized_svg do pygame-ce). O pygame comum (o do console
-    T-TEA) nao tem essa funcao e o SDL_image dele ignora o viewBox: entao a raiz
+    TTEA) nao tem essa funcao e o SDL_image dele ignora o viewBox: entao a raiz
     ganha o tamanho pedido e o desenho vai dentro de um grupo ja escalado."""
     if hasattr(pygame.image, "load_sized_svg"):
         return pygame.image.load_sized_svg(src, size)
@@ -508,9 +516,10 @@ def clip_near(poly, f_min):
 
 # --- jogo ---------------------------------------------------------------------
 class Game:
-    def __init__(self, screen, demo=False):
+    def __init__(self, screen, demo=False, jump=True):
         self.screen = screen
         self.demo = demo  # fundo do menu: camera girando devagar, sem placar
+        self.jump = jump  # Espaco pula (fora do console TTEA)
         self.paused = False  # o menu de pausa esta por cima (esconde o aviso do centro)
         self.show_hud = True  # False: desenha so o rio (a tela OPCOES poe o titulo no lugar do placar)
         # textos do jogo: mesma fonte e contorno do marcador de reciclagem (estilo cartoon)
@@ -585,8 +594,8 @@ class Game:
         pygame.draw.circle(mask, (255, 255, 255, 255), (4 * r, 4 * r), 4 * r)
         self.map_mask = pygame.transform.smoothscale(mask, (2 * r, 2 * r))
         self.fonts = {}
-        self.run_log = None  # chamado com (jogo, motivo) quando uma corrida acaba (console T-TEA)
-        self.feet_mode = False   # console T-TEA: os avisos falam dos pes, nao das teclas
+        self.run_log = None  # chamado com (jogo, motivo) quando uma corrida acaba (console TTEA)
+        self.feet_mode = False   # console TTEA: os avisos falam dos pes, nao das teclas
         self.reset_run()
         if demo:  # fundo do menu: um rio mais cheio
             self.river = 5
@@ -941,7 +950,7 @@ class Game:
             return
         if ev.key in (pygame.K_LEFT, pygame.K_RIGHT):
             self.queued = -1 if ev.key == pygame.K_LEFT else 1
-        elif ev.key == pygame.K_SPACE and (not self.air or not self.double_used):
+        elif ev.key == pygame.K_SPACE and self.jump and (not self.air or not self.double_used):
             if self.air:  # salto duplo: so um por pulo
                 self.double_used = True
             play("salto_duplo" if self.air else "pulo")
@@ -1708,11 +1717,13 @@ class App:
     MAIN = ["JOGAR", "OPÇÕES", "CRÉDITOS", "SAIR"]
     PAUSE = ["CONTINUAR", "OPÇÕES", "MENU PRINCIPAL"]
     SOUND = [("MÚSICA", "musica"), ("EFEITOS", "efeitos")]  # barras da tela OPÇÕES (+ VOLTAR)
+    CHOICES = ("controle", "resolucao", "tela_cheia")  # linhas da tela OPÇÕES trocadas com as setas
     GAMEOVER = ["JOGAR DE NOVO", "MENU PRINCIPAL"]
 
     def __init__(self, screen, console=None):
         self.screen = screen
-        self.console = console  # console T-TEA (controle pelos pes), ou None so no teclado
+        self.console = console  # console TTEA (controle pelos pes), ou None so no teclado
+        self.feet = console is not None  # no TTEA: pes (padrao) ou so teclado (tela OPÇÕES)
         self.dwell = 0.0         # tempo parado em cima do botao dwell_on (pes no console)
         self.dwell_on = None
         self.dwell_armed = True  # depois de escolher, os pes tem que sair dos botoes
@@ -1737,6 +1748,7 @@ class App:
         self.credits_img = self.credits_fade = None  # montados no primeiro desenho
         self.credits_scroll = 0.0
         self.sound_from = "menu"  # tela que abriu a de OPÇÕES (volta para ela): menu ou pause
+        self.window_choice = dict(config)  # resolucao e tela cheia na tela OPÇÕES, antes do Enter
         # menus desenhados para BASE_W x BASE_H: na tela maior do console, vao para o meio
         self.dx, self.dy = (W - BASE_W) // 2, (H - BASE_H) // 2
         self.dragging = None      # barra de volume sendo arrastada com o mouse
@@ -1747,13 +1759,14 @@ class App:
     def choose(self, option):
         play("menu_ok")
         if option == "JOGAR":
-            self.game = Game(self.screen)
+            self.game = Game(self.screen, jump=self.console is None)
             if self.console:
                 self.game.run_log = self.console.save_run
-                self.game.feet_mode = True
+            self.game.feet_mode = self.feet
             self.mode = "game"
         elif option == "OPÇÕES":
             self.sound_from, self.mode, self.sel = self.mode, "sound", 0
+            self.window_choice = {"resolucao": current_resolution(), "tela_cheia": config["tela_cheia"]}
         elif option == "CRÉDITOS":
             self.mode = "credits"
             self.credits_scroll = 0.0
@@ -1825,20 +1838,71 @@ class App:
                 if rect.collidepoint(ev.pos):
                     self.choose(opts[i])
 
+    def sound_rows(self):
+        """Linhas da tela OPÇÕES: as barras, as escolhas (o controle no TTEA; a
+        resolucao e a tela cheia fora dele) e o VOLTAR."""
+        choices = ["controle"] if self.console else ["resolucao", "tela_cheia"]
+        return [key for _, key in self.SOUND] + choices + ["voltar"]
+
+    def choice_text(self, row):
+        """(titulo, texto do botao) de uma linha de escolha da tela OPÇÕES. Escolha
+        ainda nao aplicada: o titulo avisa do Enter."""
+        if row == "controle":  # pes no console ou so o teclado
+            return "CONTROLE", "CONSOLE TTEA" if self.feet else "TECLADO"
+        if row == "resolucao":  # da janela, ou do monitor em tela cheia
+            head, label = "RESOLUÇÃO", self.window_choice["resolucao"]
+        else:
+            head, label = "TELA CHEIA", "LIGADA" if self.window_choice["tela_cheia"] else "DESLIGADA"
+        applied = {"resolucao": current_resolution(), "tela_cheia": config["tela_cheia"]}
+        if self.window_choice[row] != applied[row]:
+            head += " · ENTER APLICA"
+        return head, label
+
+    def change_choice(self, row, step):
+        """Troca a escolha da linha row: step 1 para a seguinte, -1 para a anterior.
+        O controle vale na hora; a resolucao e a tela cheia, so com o Enter."""
+        if row == "controle":
+            self.toggle_feet()
+            return
+        choice = self.window_choice
+        if row == "resolucao":
+            options = resolutions()
+            index = options.index(choice["resolucao"]) if choice["resolucao"] in options else 0
+            choice["resolucao"] = options[(index + step) % len(options)]
+        else:
+            choice["tela_cheia"] = not choice["tela_cheia"]
+        play("menu_mover")
+
+    def apply_window_choice(self):
+        """Enter na resolucao ou na tela cheia: a janela (ou o monitor, em tela
+        cheia) muda para o escolhido."""
+        config.update(self.window_choice)
+        apply_window()
+        save_config()
+        play("menu_ok")
+
     def handle_sound_event(self, ev):
-        """Tela OPÇÕES: setas para cima/baixo escolhem a barra (ou VOLTAR), para os
-        lados mudam 10%; com o mouse, clicar ou arrastar na barra."""
-        rows = len(self.SOUND) + 1  # as barras e o VOLTAR
+        """Tela OPÇÕES: setas para cima/baixo escolhem a barra (ou a escolha, o
+        VOLTAR), para os lados mudam 10% (ou trocam a escolha; a resolucao e a
+        tela cheia so valem com o Enter); com o mouse, clicar ou arrastar na
+        barra, e o clique numa escolha troca e aplica."""
+        rows = self.sound_rows()
         if ev.type == pygame.KEYDOWN:
+            row = rows[self.sel]
             if ev.key in (pygame.K_UP, pygame.K_w, pygame.K_DOWN, pygame.K_s):
-                self.sel = (self.sel + (1 if ev.key in (pygame.K_DOWN, pygame.K_s) else -1)) % rows
+                self.sel = (self.sel + (1 if ev.key in (pygame.K_DOWN, pygame.K_s) else -1)) % len(rows)
                 play("menu_mover")
-            elif ev.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d) and self.sel < len(self.SOUND):
-                key = self.SOUND[self.sel][1]
+            elif ev.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d) and row in volume:
                 step = 0.1 if ev.key in (pygame.K_RIGHT, pygame.K_d) else -0.1
-                self.set_volume(key, volume[key] + step)
+                self.set_volume(row, volume[row] + step)
+            elif row in self.CHOICES and ev.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
+                self.change_choice(row, 1 if ev.key in (pygame.K_RIGHT, pygame.K_d) else -1)
+            elif row == "controle" and ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                self.toggle_feet()
+            elif row in self.CHOICES and ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                self.apply_window_choice()
             elif ev.key == pygame.K_ESCAPE or (ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE)
-                                               and self.sel == len(self.SOUND)):
+                                               and row == "voltar"):
                 self.close_sound()
         elif ev.type == pygame.MOUSEMOTION:
             if self.dragging is not None:
@@ -1852,8 +1916,13 @@ class App:
             for i, rect in enumerate(self.buttons):
                 if not rect.inflate(0, 30).collidepoint(ev.pos):
                     continue
-                if i == len(self.SOUND):
+                if rows[i] == "voltar":
                     self.close_sound()
+                elif rows[i] in self.CHOICES:
+                    self.sel = i
+                    self.change_choice(rows[i], 1)
+                    if rows[i] != "controle":
+                        self.apply_window_choice()
                 else:
                     self.sel = self.dragging = i
                     self.volume_from_mouse(i, ev.pos[0])
@@ -1874,6 +1943,15 @@ class App:
         bar = self.buttons[row]
         volume[self.SOUND[row][1]] = round(min(1.0, max(0.0, (x - bar.left) / bar.w)), 2)
 
+    def toggle_feet(self):
+        """Console TTEA: troca entre jogar com os pes e so no teclado."""
+        self.feet = not self.feet
+        self.console.present_t = 0.0
+        self.dwell, self.dwell_on, self.dwell_armed = 0.0, None, True
+        if self.game:
+            self.game.feet_mode = self.feet
+        play("menu_ok")
+
     def close_sound(self):
         save_config()
         self.dragging = None
@@ -1882,8 +1960,8 @@ class App:
         play("menu_ok")
 
     def update_feet(self, dt):
-        """Console T-TEA: na partida os pes viram teclas (passo para o lado vira,
-        pulo pula, parado sai andando); nos menus, parar em cima de um botao
+        """Console TTEA: na partida os pes viram teclas (passo para o lado vira,
+        parado sai andando); nos menus, parar em cima de um botao
         por DWELL_TIME escolhe."""
         con = self.console
         commands = con.update(dt)
@@ -1909,7 +1987,7 @@ class App:
             for i, rect in enumerate(self.buttons):
                 if rect.inflate(16, 24).collidepoint(pos):
                     hit = i
-            if self.mode == "sound" and hit is not None and hit < len(self.SOUND):
+            if self.mode == "sound" and hit is not None and self.sound_rows()[hit] != "voltar":
                 hit = None
         if hit is None:
             self.dwell, self.dwell_on, self.dwell_armed = 0.0, None, True
@@ -1930,10 +2008,10 @@ class App:
                 self.choose(self.options()[hit])
 
     def draw_feet(self):
-        """Marcador dos pes do jogador (console T-TEA). Na partida uma bolinha
+        """Marcador dos pes do jogador (console TTEA). Na partida uma bolinha
         por pe (as marcacoes respondem a cada pe); nos menus um marcador so, com
         o anel que enche enquanto ele fica parado em cima de um botao."""
-        pos = self.console.pointer if self.console else None
+        pos = self.console.pointer if self.feet else None
         if pos is None:
             return
         scr = self.screen
@@ -1994,7 +2072,7 @@ class App:
         return self.sticker_cache[key]
 
     def draw_panel(self):
-        """Marcacoes do console T-TEA por cima do rio, na parte de baixo da tela
+        """Marcacoes do console TTEA por cima do rio, na parte de baixo da tela
         (o rio continua por baixo delas): as pegadas no meio e uma seta de virar
         de cada lado. Uma seta com um pe em cima afunda e fica amarela (como o
         botao selecionado); fora da corrida elas ficam apagadas. Nos menus, um
@@ -2067,7 +2145,7 @@ class App:
         return pygame.transform.smoothscale(big, (w, h))
 
     def update(self, dt):
-        if self.console:
+        if self.feet:
             self.update_feet(dt)
         music_volume(0.4 if self.mode in ("pause", "gameover") else 1.0)  # mais baixa com o jogo parado
         if self.mode == "game":
@@ -2099,11 +2177,11 @@ class App:
         if title:
             scr.blit(self.menu_img["titulo"], self.menu_img["titulo"].get_rect(center=(MENU_X + self.dx, 74 + self.dy)))
 
-    def draw_menu_button(self, label, center, sel):
+    def draw_menu_button(self, label, center, sel, width=230):
         """Botao cartoon: contorno escuro e relevo embaixo; o selecionado num
         amarelo suave, os outros quase brancos. Devolve o retangulo (para o mouse)."""
         scr, ink = self.screen, (32, 36, 43)
-        rect = pygame.Rect(0, 0, 230, 44)
+        rect = pygame.Rect(0, 0, width, 44)
         rect.center = center
         pygame.draw.rect(scr, ink, rect.move(0, 4), border_radius=12)  # relevo embaixo
         pygame.draw.rect(scr, (242, 214, 130) if sel else (232, 242, 250), rect, border_radius=12)
@@ -2126,7 +2204,7 @@ class App:
         if rec["pontos"]:
             msg = "RECORDE  %d  ·  RIO %d" % (rec["pontos"], rec["rio"])
         else:  # no console o aviso de baixo ja diz como escolher
-            msg = "SEM RECORDE" if self.console else "SETAS E ENTER, OU O MOUSE"
+            msg = "SEM RECORDE" if self.feet else "SETAS E ENTER, OU O MOUSE"
         img = self.sticker(msg, self.record_font)
         scr.blit(img, img.get_rect(center=(MENU_X + self.dx, 418 + self.dy)))
 
@@ -2136,14 +2214,15 @@ class App:
         uma linha fina, o aviso para apertar uma tecla (pulsando de leve). O
         barco fica livre no meio."""
         scr, game = self.screen, self.game
+        controls = self.controls()
         col_w, scale = 100, 0.65  # largura de cada coluna; teclas menores
-        panel = pygame.Rect(0, 0, col_w * len(CONTROLS) + 24, 112)
+        panel = pygame.Rect(0, 0, col_w * len(controls) + 24, 112)
         panel.midtop = (W // 2, 70)
         box = pygame.Surface(panel.size, pygame.SRCALPHA)
         pygame.draw.rect(box, (0, 15, 30, 165), box.get_rect(), border_radius=14)
         pygame.draw.line(box, (255, 255, 255, 50), (22, 80), (panel.w - 22, 80), 2)  # separa o aviso
         scr.blit(box, panel)
-        for i, (keys, _, short) in enumerate(CONTROLS):
+        for i, (keys, _, short) in enumerate(controls):
             cx = panel.left + 12 + col_w * i + col_w // 2
             caps = [self.keycap(k) for k in keys]
             caps = [pygame.transform.smoothscale(c, (round(c.get_width() * scale), round(c.get_height() * scale)))
@@ -2192,8 +2271,14 @@ class App:
         dy = self.dy
         scr.blit(img, img.get_rect(center=(W // 2, 48 + dy)))
         left, right = 155 + self.dx, 452 + self.dx  # meio de cada coluna
-        line = pygame.Rect(0, 0, 8, 260)  # divisoria entre as colunas: traco claro com contorno escuro
-        line.center = (296 + self.dx, 232 + dy)
+        rows = self.sound_rows()
+        choices = [row for row in rows if row in self.CHOICES]
+        # 3 linhas na coluna da esquerda no TTEA; fora dele 4, e o VOLTAR desce (a tela
+        # tem CANVAS_H de altura, mais que BASE_H: cabe)
+        top, step = 172, 80
+        back_y, line_h = (418, 260) if len(choices) == 1 else (494, 340)
+        line = pygame.Rect(0, 0, 8, line_h)  # divisoria entre as colunas: traco claro com contorno escuro
+        line.midtop = (296 + self.dx, 102 + dy)
         pygame.draw.rect(scr, (32, 36, 43), line, border_radius=4)
         pygame.draw.rect(scr, (245, 250, 252), line.inflate(-4, -4), border_radius=2)
         for cx, head in ((left, "VOLUME"), (right, "CONTROLES")):
@@ -2201,9 +2286,18 @@ class App:
             scr.blit(img, img.get_rect(center=(cx, 112 + dy)))
         self.buttons = []
         for i, (label, key) in enumerate(self.SOUND):
-            self.buttons.append(self.draw_slider(label, volume[key], (left, 182 + i * 90 + dy), i == self.sel))
+            self.buttons.append(self.draw_slider(label, volume[key], (left, top + i * step + dy), i == self.sel))
+        for i, row in enumerate(choices, len(self.SOUND)):  # escolhas: titulo em cima, botao embaixo
+            cy = top + i * step + dy
+            head, label = self.choice_text(row)
+            img = self.sticker(head, self.record_font)
+            scr.blit(img, img.get_rect(center=(left, cy - 30)))
+            rect = self.draw_menu_button(label, (left, cy + 4), i == self.sel, width=210)
+            if i == self.sel:  # setinhas: as setas do teclado trocam a escolha
+                self.draw_side_arrows(rect)
+            self.buttons.append(rect)
         self.draw_controls(right, 165 + dy, 56)
-        self.buttons.append(self.draw_menu_button("VOLTAR", (W // 2, 418 + dy), self.sel == len(self.SOUND)))
+        self.buttons.append(self.draw_menu_button("VOLTAR", (W // 2, back_y + dy), rows[self.sel] == "voltar"))
 
     def draw_slider(self, label, value, center, sel):
         """Barra de volume no estilo dos botoes: nome em adesivo em cima, barra
@@ -2225,12 +2319,16 @@ class App:
         txt = self.menu_font.render("%d%%" % round(value * 100), True, ink)
         scr.blit(txt, txt.get_rect(center=(bar.centerx, bar.centery + 1)))
         if sel:  # setinhas: as setas do teclado mudam o volume
-            for side in (-1, 1):
-                x = bar.centerx + side * (bar.w // 2 + 18)
-                pts = [(x + side * 8, bar.centery), (x - side * 6, bar.centery - 9), (x - side * 6, bar.centery + 9)]
-                pygame.draw.polygon(scr, (245, 250, 252), pts)
-                pygame.draw.polygon(scr, ink, pts, 2)
+            self.draw_side_arrows(bar)
         return bar
+
+    def draw_side_arrows(self, rect):
+        """Setinhas brancas com contorno escuro dos dois lados de rect."""
+        for side in (-1, 1):
+            x = rect.centerx + side * (rect.w // 2 + 18)
+            pts = [(x + side * 8, rect.centery), (x - side * 6, rect.centery - 9), (x - side * 6, rect.centery + 9)]
+            pygame.draw.polygon(self.screen, (245, 250, 252), pts)
+            pygame.draw.polygon(self.screen, (32, 36, 43), pts, 2)
 
     def draw_credits(self):
         """Creditos no mesmo visual do menu: mesmo fundo, textos em adesivo
@@ -2252,12 +2350,18 @@ class App:
         self.buttons = []  # qualquer tecla ou clique volta (ver handle_event)
         self.draw_menu_button("VOLTAR", (MENU_X + self.dx, 418 + self.dy), True)
 
+    def controls(self):
+        """Controles mostrados: sem o pulo no console TTEA."""
+        if self.console is None:
+            return CONTROLS
+        return [c for c in CONTROLS if c[0] != ["space"]]
+
     def draw_controls(self, cx, y, step):
         """Lista de controles centrada em cx a partir de y: em cada linha as
         teclas desenhadas e, ao lado, o que elas fazem."""
         scr = self.screen
         keys_x, text_x = cx - 85, cx - 15  # meio das teclas, comeco do texto
-        for keys, action, _ in CONTROLS:
+        for keys, action, _ in self.controls():
             caps = [self.keycap(k) for k in keys]
             w = sum(c.get_width() for c in caps) + 6 * (len(caps) - 1)
             x = keys_x - w // 2
@@ -2348,9 +2452,9 @@ class App:
 
     def draw(self):
         self.draw_screen()
-        if self.console:
+        if self.feet:
             self.draw_panel()
-        self.draw_feet()
+            self.draw_feet()
 
     def draw_screen(self):
         scr = self.screen
@@ -2366,7 +2470,7 @@ class App:
         if self.mode in ("game", "pause", "gameover"):
             # comeco da corrida (rio 1 esperando a primeira tecla): mostra os controles
             # (no console as marcacoes do chao ja mostram os controles)
-            help_ = self.mode == "game" and self.game.waiting and self.game.river == 1 and not self.console
+            help_ = self.mode == "game" and self.game.waiting and self.game.river == 1 and not self.feet
             self.game.paused = self.mode == "pause" or help_  # o aviso do centro sai (vai embaixo dos controles)
             self.game.draw()
             if self.mode == "pause":
@@ -2378,9 +2482,71 @@ class App:
                 for i, label in enumerate(self.GAMEOVER):
                     self.buttons.append(self.draw_menu_button(label, (W // 2, H // 2 + 50 + i * 58), i == self.sel))
 
+window = None  # janela comum (fora do TTEA), para a tela OPÇÕES mudar o tamanho
+
+
+def resolutions():
+    """Resolucoes da tela OPÇÕES: a do desenho (W x H, sem ampliar) e as maiores
+    na mesma proporcao, ate a do monitor."""
+    dw, dh = pygame.display.get_desktop_sizes()[0]
+    sizes = [(W, H)] + [(round(h * W / H), h) for h in RESOLUTION_HEIGHTS
+                        if h > H and round(h * W / H) <= dw and h <= dh]
+    return ["%d x %d" % size for size in sizes]
+
+
+def current_resolution():
+    return config["resolucao"] or resolutions()[0]
+
+
+def apply_window():
+    """Janela como na tela OPÇÕES: do tamanho da resolucao, no meio da tela
+    (maximizada, se nao couber), ou em tela cheia com o monitor nessa
+    resolucao (o SDL usa o modo de video mais proximo do tamanho da janela).
+    O pygame amplia o desenho."""
+    window.set_windowed()
+    window.restore()  # sai do maximizado
+    size = tuple(int(v) for v in current_resolution().split(" x "))
+    window.size = size
+    free_scaling()
+    dw, dh = pygame.display.get_desktop_sizes()[0]
+    if config["tela_cheia"]:
+        window.set_fullscreen(desktop=False)
+    elif size[0] > dw * WINDOW_FILL or size[1] > dh * WINDOW_FILL:
+        window.maximize()
+    else:
+        window.position = pygame.WINDOWPOS_CENTERED
+
+
+def free_scaling():
+    """O pygame (SCALED) so amplia a janela em multiplos inteiros do desenho: num
+    tamanho no meio (1600 x 900 para 1191 x 670) ele fica em 1x, com borda
+    preta. Liga a ampliacao livre direto no SDL do pygame; sem achar o SDL,
+    fica a borda."""
+    try:
+        import ctypes
+        import glob
+        base = os.path.dirname(pygame.__file__)
+        lib = (glob.glob(os.path.join(base, "SDL2.dll")) + glob.glob(os.path.join(base, ".dylibs", "libSDL2-*"))
+               + glob.glob(os.path.join(os.path.dirname(base), "pygame_ce.libs", "libSDL2-*")))[0]
+        sdl = ctypes.CDLL(lib)
+        sdl.SDL_GetWindowFromID.restype = ctypes.c_void_p
+        sdl.SDL_GetWindowFromID.argtypes = [ctypes.c_uint32]
+        sdl.SDL_GetRenderer.restype = ctypes.c_void_p
+        sdl.SDL_GetRenderer.argtypes = [ctypes.c_void_p]
+        sdl.SDL_RenderSetIntegerScale.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        renderer = sdl.SDL_GetRenderer(sdl.SDL_GetWindowFromID(window.id))
+        if renderer:
+            sdl.SDL_RenderSetIntegerScale(renderer, 0)
+    except (OSError, IndexError, AttributeError):
+        pass
+
+
 def open_window():
-    """Janela comum (fora do T-TEA): o jogo e desenhado em W x H e o pygame amplia
-    a janela (pode redimensionar/maximizar). O mouse e convertido sozinho."""
+    """Janela comum (fora do TTEA): o jogo e desenhado em W x H e a janela abre
+    na resolucao e na tela cheia escolhidas na tela OPÇÕES (de inicio 1191 x 670,
+    em janela); pode redimensionar e maximizar, e o pygame amplia o desenho. O
+    mouse e convertido sozinho."""
+    global window
     screen = pygame.display.set_mode((W, H), pygame.SCALED | pygame.RESIZABLE)
     window_cls = getattr(pygame, "Window", None)  # pygame-ce; no pygame comum fica no _sdl2
     if window_cls is None:
@@ -2388,8 +2554,9 @@ def open_window():
     with warnings.catch_warnings():  # from_display_module avisa que esta obsoleto, mas funciona
         warnings.simplefilter("ignore", DeprecationWarning)
         window = window_cls.from_display_module()
-    window.size = (round(W * WINDOW_SCALE), round(H * WINDOW_SCALE))
-    window.position = pygame.WINDOWPOS_CENTERED
+    if config["resolucao"] not in resolutions() + [DEFAULT_RESOLUTION]:
+        config["resolucao"] = None  # monitor menor que o da ultima vez: a menor
+    apply_window()
     return screen
 
 
@@ -2399,13 +2566,17 @@ def main():
     os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "linear")  # ampliacao suave, sem serrilhado
     pygame.init()
     console = None
-    if args.player_id is not None:  # aberto pelo console T-TEA (veja console_ttea.py)
+    if args.player_id is not None:  # aberto pelo console TTEA (veja console_ttea.py)
         console = console_ttea.Console(args)
         RECORD_FILE, CONFIG_FILE = console.record_file(), console.config_file()  # por jogador
         # o rio vai ate embaixo, por baixo das marcacoes; o barco desce junto com a tela
         set_screen_size(*console.canvas_size, console_ttea.BOAT_Y, console_ttea.CAMERA_VIEW)
+        load_config()
         screen = console.open_display(pygame)
-    else:
+    else:  # mesma tela e camera do console, na proporcao do monitor (sem as marcacoes)
+        canvas = console_ttea.canvas_for(pygame.display.get_desktop_sizes()[0])
+        set_screen_size(*canvas, console_ttea.BOAT_Y, console_ttea.CAMERA_VIEW)
+        load_config()  # antes da janela: ela abre na resolucao escolhida
         screen = open_window()
     pygame.display.set_caption("Zero Oil")
     init_sounds()

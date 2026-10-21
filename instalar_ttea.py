@@ -1,10 +1,10 @@
-"""Copia o Zero Oil para a pasta de jogos do console T-TEA.
+"""Copia o Zero Oil para a pasta de jogos do console TTEA.
 
-  python instalar_ttea.py C:/caminho/do/ttea          (raiz do repositorio do T-TEA)
+  python instalar_ttea.py C:/caminho/do/ttea          (raiz do repositorio do TTEA)
   python instalar_ttea.py C:/.../exergames            (ou direto a pasta de jogos)
 
-O T-TEA lista cada pasta de jogos que tem um metadata.json; o jogo fica em
-<jogos>/zerooil. Rodar de novo atualiza o codigo e a arte. O T-TEA guarda os
+O TTEA lista cada pasta de jogos que tem um metadata.json; o jogo fica em
+<jogos>/zerooil. Rodar de novo atualiza o codigo e a arte. O TTEA guarda os
 dados do jogo (recordes por jogador, opcoes, corridas.csv, zerooil.log) nessa
 mesma pasta: eles nao sao apagados nem trocados pelos daqui.
 """
@@ -19,7 +19,7 @@ FOLDER = "zerooil"
 
 
 def games_dir(path):
-    inner = os.path.join(path, "src", "ttea", "games")  # repositorio do T-TEA (modo dev)
+    inner = os.path.join(path, "src", "ttea", "games")  # repositorio do TTEA (modo dev)
     return inner if os.path.isdir(inner) else path
 
 

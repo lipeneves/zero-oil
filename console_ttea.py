@@ -1,12 +1,12 @@
-"""Ligacao do Zero Oil com o console T-TEA (chao interativo).
+"""Ligacao do Zero Oil com o console TTEA (chao interativo).
 
-O T-TEA (https://github.com/larvattea/ttea) projeta o jogo no chao e acompanha
+O TTEA (https://github.com/larvattea/ttea) projeta o jogo no chao e acompanha
 o jogador com uma webcam e o MediaPipe. Ele abre o jogo com o proprio Python e
 estes argumentos:
 
   --lang pt_BR  --player_id 3  --professional_id 1
 
-Quando eles chegam, o jogo roda no "modo T-TEA": tela cheia no projetor
+Quando eles chegam, o jogo roda no "modo TTEA": tela cheia no projetor
 calibrado, recorde e opcoes por jogador, cada corrida registrada para o
 profissional e o barco controlado pelos pes, pisando nas marcacoes (PADS)
 projetadas na parte de baixo da tela (o rio continua por baixo delas):
@@ -18,12 +18,14 @@ projetadas na parte de baixo da tela (o rio continua por baixo delas):
 Basta um pe na marcacao. Cada pisada vale uma vez: para repetir, tire o pe e
 pise de novo.
 
-O teclado e o mouse continuam funcionando (para o profissional). Sem os
-argumentos o jogo roda como antes, so no teclado.
+O teclado e o mouse continuam funcionando (para o profissional). Na tela OPCOES,
+CONTROLE troca entre CONSOLE TTEA (o padrao, a cada vez que o jogo abre) e
+TECLADO (sem pes, marcacoes nem escolha parando nos botoes). Sem os argumentos
+o jogo roda como antes, so no teclado.
 
 Para testar sem o console montado (sem camera, projetor nem calibracao), o
 mouse faz o papel dos pes: --simular-pes (ou a variavel de ambiente
-ZEROOIL_SIMULAR_PES=1, que vale tambem quando o jogo e aberto pelo T-TEA). A
+ZEROOIL_SIMULAR_PES=1, que vale tambem quando o jogo e aberto pelo TTEA). A
 seta do mouse e onde o jogador esta pisando; o jogo abre numa janela comum.
 
 A camera e o MediaPipe ficam numa thread separada: a deteccao leva dezenas de
@@ -37,9 +39,10 @@ import threading
 import time
 from datetime import datetime
 
-GAME_FOLDER = "zerooil"  # pasta dos dados do jogo dentro dos dados do T-TEA
+GAME_FOLDER = "zerooil"  # pasta dos dados do jogo dentro dos dados do TTEA
 CONTROL_W, CONTROL_H = 640, 480  # espaco da imagem da camera em que a calibracao e feita
 PREVIEW_WINDOW = "Zero Oil - camera"
+GAME_DIR = os.path.dirname(os.path.abspath(__file__))  # onde ficam os arquivos quando nao ha TTEA
 
 # --- tela e controle pelos pes ----------------------------------------------------
 # Como o KarTEA, o jogo ocupa a tela calibrada inteira, na proporcao dela (sem
@@ -47,7 +50,8 @@ PREVIEW_WINDOW = "Zero Oil - camera"
 # da tela pede (num projetor 16:9, 1191 x 670): o campo de visao abre para os
 # lados. O pygame amplia o desenho para a resolucao da tela. O rio vai ate
 # embaixo (ver zero_oil.set_screen_size), o barco fica em BOAT_Y e as marcacoes
-# na parte de baixo, sem cobrir o caminho do barco.
+# na parte de baixo, sem cobrir o caminho do barco. Fora do console o jogo usa a
+# mesma tela (na proporcao do monitor) e a mesma camera, sem as marcacoes.
 GAME_H = 480
 PANEL_H = 190
 CANVAS_H = GAME_H + PANEL_H
@@ -61,8 +65,8 @@ PADS = {
     "right": ((130, GAME_H + 130), (124, 88)),
 }
 STAND_SPOT = ((0, GAME_H + 134), (132, 84))  # pegadas: parado aqui, o barco sai andando
-BOAT_Y = 400        # linha da tela onde o barco encosta na agua (fora do console: 309)
-# camera do console, mais de cima (fora do console: barco a 66 graus, camera a 49):
+BOAT_Y = 400        # linha da tela onde o barco encosta na agua (na tela 640 x 480: 309)
+# camera mais de cima que a da tela 640 x 480 (barco a 66 graus, camera a 49):
 # (angulo de onde se ve o barco, inclinacao da camera), em graus da horizontal.
 # 90 seria visto de cima; o desenho do barco mostra um pouco da traseira.
 CAMERA_VIEW = (74, 66)
@@ -75,20 +79,26 @@ log = logging.getLogger("zerooil")
 
 
 def parse_args(argv=None):
-    """Argumentos que o T-TEA passa; os desconhecidos sao ignorados."""
+    """Argumentos que o TTEA passa; os desconhecidos sao ignorados."""
     parser = argparse.ArgumentParser(description="Zero Oil")
     parser.add_argument("--lang", default="pt_BR", help="idioma da plataforma (o jogo e so em portugues)")
-    parser.add_argument("--player_id", type=int, default=None, help="jogador escolhido no T-TEA")
+    parser.add_argument("--player_id", type=int, default=None, help="jogador escolhido no TTEA")
     parser.add_argument("--professional_id", type=int, default=None, help="profissional que acompanha")
     parser.add_argument("--sem-camera", dest="camera", action="store_false",
-                        help="modo T-TEA sem a camera (so teclado), para testar")
+                        help="modo TTEA sem a camera (so teclado), para testar")
     parser.add_argument("--simular-pes", dest="simulate", action="store_true",
                         help="o mouse faz o papel dos pes, sem o console montado")
     args, _ = parser.parse_known_args(argv)
     args.simulate = args.simulate or os.environ.get("ZEROOIL_SIMULAR_PES", "") not in ("", "0")
-    if args.simulate and args.player_id is None:  # simulacao fora do T-TEA: jogador de teste
+    if args.simulate and args.player_id is None:  # simulacao fora do TTEA: jogador de teste
         args.player_id, args.professional_id = 0, args.professional_id or 0
     return args
+
+
+def canvas_for(screen_size):
+    """Tamanho do desenho do jogo para uma tela: CANVAS_H de altura, na proporcao dela."""
+    sw, sh = screen_size
+    return (max(MIN_CANVAS_W, round(CANVAS_H * sw / sh)), CANVAS_H)
 
 
 def pad_rect(spec, margin=0):
@@ -103,7 +113,7 @@ def inside(rect, point):
 
 
 class Console:
-    """Dados do T-TEA para o jogo: tela e camera calibradas, pasta de dados,
+    """Dados do TTEA para o jogo: tela e camera calibradas, pasta de dados,
     controle pelos pes e o registro das corridas.
 
     Parameters
@@ -117,9 +127,12 @@ class Console:
     """
 
     def __init__(self, args):
-        from ttea.model import Calibration, CalibrationPoint
-        from ttea.service import CalibrationService
-        from ttea.util import PathConfig
+        try:
+            from ttea.model import Calibration, CalibrationPoint
+            from ttea.service import CalibrationService
+            from ttea.util import PathConfig
+        except ImportError:  # fora do TTEA (so a simulacao com o mouse): sem calibracao nem pasta dele
+            Calibration = CalibrationPoint = CalibrationService = PathConfig = None
 
         self.args = args
         self.player_id = args.player_id
@@ -127,10 +140,10 @@ class Console:
         self.path_config = PathConfig
         logging.basicConfig(filename=self.data_file("zerooil.log"), level=logging.INFO,
                             format="%(asctime)s %(levelname)s %(message)s")
-        log.info("Zero Oil no T-TEA: jogador %s, profissional %s", self.player_id, self.professional_id)
+        log.info("Zero Oil no TTEA: jogador %s, profissional %s", self.player_id, self.professional_id)
 
-        cal = CalibrationService()
-        hw = cal.find_by_id_calibration(Calibration.ID_VALUE)
+        cal = CalibrationService() if CalibrationService else None
+        hw = cal.find_by_id_calibration(Calibration.ID_VALUE) if cal else None
         size = cal.get_screen_size() if hw else None
         self.screen_index = hw.screen_position if hw else 0
         self.screen_size = (size["width"], size["height"]) if size else SIMULATED_SCREEN
@@ -138,7 +151,7 @@ class Console:
 
         # o desenho na proporcao da tela calibrada; tela -> desenho para os pes
         sw, sh = self.screen_size
-        self.canvas_size = (max(MIN_CANVAS_W, round(CANVAS_H * sw / sh)), CANVAS_H)
+        self.canvas_size = canvas_for(self.screen_size)
         cw, ch = self.canvas_size
         mid = cw // 2
         self.pads = {name: ((mid + dx, y), size) for name, ((dx, y), size) in PADS.items()}
@@ -148,7 +161,7 @@ class Console:
         self.offset = ((sw - cw * self.scale) / 2, (sh - ch * self.scale) / 2)
 
         self.tracker = None
-        point = cal.find_by_id_calibration_point(CalibrationPoint.ID_VALUE)
+        point = cal.find_by_id_calibration_point(CalibrationPoint.ID_VALUE) if cal else None
         if args.simulate:
             log.info("simulando os pes com o mouse")
             self.fullscreen = False  # janela comum, para usar o mouse
@@ -157,7 +170,7 @@ class Console:
         elif not args.camera:
             log.info("camera desligada (--sem-camera)")
         elif hw is None or point is None:
-            log.warning("sem calibracao no T-TEA: o jogo fica so no teclado")
+            log.warning("sem calibracao no TTEA: o jogo fica so no teclado")
         else:
             corners = [(point.pointx1, point.pointy1), (point.pointx2, point.pointy2),
                        (point.pointx3, point.pointy3), (point.pointx4, point.pointy4)]
@@ -190,7 +203,9 @@ class Console:
 
     # ---- arquivos ----
     def data_file(self, name):
-        """Arquivo na pasta de dados do jogo dentro dos dados do T-TEA."""
+        """Arquivo na pasta de dados do jogo dentro dos dados do TTEA (fora dele, na pasta do jogo)."""
+        if self.path_config is None:
+            return os.path.join(GAME_DIR, name)
         return self.path_config.game_save(GAME_FOLDER, name)
 
     def record_file(self):
@@ -241,11 +256,11 @@ class Console:
         except pygame.error:  # monitor da calibracao desligado: abre no principal
             log.warning("monitor %s indisponivel", self.screen_index)
             screen = pygame.display.set_mode(self.canvas_size, flags)
-        try:  # o T-TEA fica na frente quando abre o jogo: traz a janela do jogo para o teclado
+        try:  # o TTEA fica na frente quando abre o jogo: traz a janela do jogo para o teclado
             from ttea.games.kartea.gameutil import regain_focus
             regain_focus()
         except Exception:
-            log.info("sem regain_focus do T-TEA")
+            log.info("sem regain_focus do TTEA")
         return screen
 
     def screen_to_game(self, x, y):
@@ -330,7 +345,7 @@ class FeetTracker(threading.Thread):
     """Camera + MediaPipe numa thread: posicao de cada pe na tela do jogo.
 
     Cada pe e o calcanhar, levado da imagem da camera para a tela pela
-    calibracao do T-TEA (mesma conta do KarTEA).
+    calibracao do TTEA (mesma conta do KarTEA).
     """
 
     HEELS = (29, 30)
@@ -407,7 +422,7 @@ class FeetTracker(threading.Thread):
                 if not ok or frame is None:
                     time.sleep(0.01)
                     continue
-                frame = cv2.flip(frame, 1)  # a calibracao do T-TEA e feita na imagem espelhada
+                frame = cv2.flip(frame, 1)  # a calibracao do TTEA e feita na imagem espelhada
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 now = time.time()
                 ms = max(last_ms + 1, int(now * 1000))  # o modo VIDEO quer tempos crescentes
