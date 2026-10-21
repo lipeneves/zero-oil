@@ -91,8 +91,9 @@ na hora, sem mexer no código:
 - **JOGO:** velocidade inicial e máxima, aceleração, quanto cada rio acelera,
   tempo da curva, quanto o barco freia e demora para retomar, câmera seguindo,
   zoom da câmera (mais perto ou mais longe), linha do barco na tela (mais
-  para cima, longe das setas) e barcos no início. Tem **um perfil para cada controle** (TECLADO e PÉS), porque com os
-  pés o jogador reage mais devagar. Vale o perfil do controle em uso.
+  para cima, longe das setas) e barcos no início. Tem **um perfil para cada
+  controle** (TECLADO e PÉS), porque com os pés o jogador reage mais devagar.
+  Vale o perfil do controle em uso.
 - **CONSOLE** (só no console ou com `--simular-pes`): tamanho e altura das
   setas, distância delas até o meio, tamanho das pegadas, folga da detecção e os
   tempos (parado para sair, parado para escolher, pés somem sem ver).
@@ -109,9 +110,10 @@ na hora, sem mexer no código:
 Com o painel aberto, o teclado controla o painel; os pés (ou o mouse da
 simulação) continuam jogando. Os valores fora do padrão ficam em amarelo e são
 gravados em `ajustes.json`, com o nome da constante do código, e voltam na
-próxima vez. No T-TEA esse arquivo fica na pasta de dados do jogo, junto do
-`zerooil.log`. Quando achar bons valores, passe-os para as constantes em
-`zero_oil.py` / `console_ttea.py`.
+próxima vez. No T-TEA ele fica em
+`C:\Projects\ttea\src\ttea\games\zerooil\ajustes.json`, junto do `zerooil.log`
+(reinstalar o jogo não apaga). Quando achar bons valores, passe-os para as
+constantes em `zero_oil.py` / `console_ttea.py`.
 
 ## Problemas comuns
 
@@ -137,6 +139,12 @@ python zero_oil.py                 # só teclado
 python zero_oil.py --simular-pes   # o mouse faz o papel dos pés, com as marcações
 ```
 
+Para testar com o mesmo Python (e as mesmas versões) do T-TEA:
+
+```powershell
+C:\Projects\ttea\.venv\Scripts\python C:\Projects\ttea\src\ttea\games\zerooil\zero_oil.py --simular-pes
+```
+
 Também dá para ligar a simulação com a variável de ambiente
 `ZEROOIL_SIMULAR_PES=1`. Ela vale inclusive quando o jogo é aberto pelo T-TEA.
 
@@ -147,5 +155,5 @@ corrida e Esc pausa.
 
 - [ ] `python instalar_ttea.py C:\Projects\ttea` com a versão final do jogo
 - [ ] `uv run dev` abriu pelo menos uma vez (dependências já baixadas)
-- [ ] `python zero_oil.py --simular-pes` funcionando
+- [ ] `python zero_oil.py --simular-pes` funcionando, com o painel (Ctrl+D) abrindo
 - [ ] Notebook com carregador, cabo HDMI para o projetor e webcam USB
