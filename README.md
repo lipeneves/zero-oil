@@ -75,6 +75,7 @@ Na parte de baixo da tela ficam as marcações:
 | --- | --- |
 | Pegadas (no meio) | ficar parado nelas faz o barco começar a andar |
 | Setas (dos lados) | vira o barco para esse lado |
+| Pular (de verdade) | o barco pula: num bloco de óleo passa por cima dos peixes e cai no primeiro óleo à frente (sem óleo, do outro lado do bloco); em mar aberto é o pulo normal |
 | Botões dos menus | parado em cima, o anel enche e escolhe |
 
 Basta um pé na marcação. Cada pisada vale uma vez: para repetir, tire o pé e
@@ -136,7 +137,7 @@ Sem câmera nem projetor, da pasta deste repositório (precisa do `pygame`:
 
 ```powershell
 python zero_oil.py                 # só teclado
-python zero_oil.py --simular-pes   # o mouse faz o papel dos pés, com as marcações
+python zero_oil.py --simular-pes   # o mouse faz o papel dos pés, com as marcações (botão direito: pulo)
 ```
 
 Para testar com o mesmo Python (e as mesmas versões) do T-TEA:

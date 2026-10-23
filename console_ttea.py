@@ -13,10 +13,12 @@ projetadas na parte de baixo da tela (o rio continua por baixo delas):
 
   Pegadas (no meio, embaixo)      ficar parado nelas comeca a andar
   Setas (dos lados das pegadas)   virar o barco para esse lado
+  Pular (de verdade)              o barco pula (veja Game.feet_jump)
   Parar em cima de um botao       escolher nos menus (o anel em volta dos pes enche)
 
 Basta um pe na marcacao. Cada pisada vale uma vez: para repetir, tire o pe e
-pise de novo.
+pise de novo. O pulo e detectado como no Herpules (jogo do TTEA): quadril e
+tornozelos acima da posicao de pe, com o quadril subindo rapido.
 
 O teclado e o mouse continuam funcionando (para o profissional). Na tela OPCOES,
 CONTROLE troca entre CONSOLE TTEA (o padrao, a cada vez que o jogo abre) e
@@ -61,7 +63,7 @@ SIMULATED_SCREEN = (1280, 720)  # simulacao sem calibracao: um projetor 16:9 com
 # altura) para cada lado das pegadas. Os valores podem mudar durante o jogo
 # (painel de ajustes, Ctrl+D): Console.layout_pads monta as posicoes de novo.
 PAD_W, PAD_H = 124, 88   # tamanho de cada seta
-PAD_GAP = 130            # distancia do meio da tela ate o meio de cada seta
+PAD_GAP = 175            # distancia do meio da tela ate o meio de cada seta
 PAD_Y = GAME_H + 130     # altura do meio das setas na tela
 STAND_W, STAND_H = 132, 84  # pegadas: parado aqui, o barco sai andando (um pouco abaixo das setas)
 BOAT_Y = 400        # linha da tela onde o barco encosta na agua (na tela 640 x 480: 309)
@@ -73,6 +75,12 @@ PAD_MARGIN = 10     # folga em volta das marcacoes (a deteccao do pe nao e exata
 LOST_AFTER = 0.5    # sem ver o jogador por este tempo (s), os pes somem da tela
 START_HOLD = 1.0    # parado nas pegadas por este tempo (s), o barco sai sozinho
 DWELL_TIME = 1.5    # tempo (s) parado em cima de um botao para escolher
+# pulo (como no Herpules), em fracoes da altura da imagem da camera
+JUMP_HIP = 0.03     # o quadril sobe isso acima da posicao de pe
+JUMP_FEET = 0.02    # e os tornozelos, isso
+JUMP_RISE = 0.12    # subindo pelo menos a esta velocidade (alturas da imagem por segundo)
+JUMP_COOLDOWN = 0.5 # segundos entre dois pulos
+BASE_FOLLOW = 1.0   # quao rapido a posicao de pe acompanha o jogador no chao (por segundo)
 
 log = logging.getLogger("zerooil")
 
@@ -273,7 +281,7 @@ class Console:
     # ---- controle pelos pes ----
     def update(self, dt):
         """Le a ultima deteccao. Devolve os comandos deste quadro ("left",
-        "right"): cada marcacao vale uma vez por pisada."""
+        "right", "jump"): cada marcacao vale uma vez por pisada."""
         if self.tracker is None:
             return []
         self.feet = self.tracker.latest()
@@ -288,6 +296,8 @@ class Console:
             self.pressed[name] = down
         if self.pressed["left"] and self.pressed["right"]:  # um pe em cada seta: nao vira
             commands = [c for c in commands if c not in ("left", "right")]
+        if self.tracker.pop_jump():
+            commands.append("jump")
         return commands
 
     def present(self, dt):
@@ -331,7 +341,10 @@ class Console:
 
 class MouseFeet:
     """Simulacao dos pes com o mouse (mesma interface do FeetTracker): a seta
-    do mouse e um pe pisando no chao."""
+    do mouse e um pe pisando no chao; o botao direito e um pulo."""
+
+    def __init__(self):
+        self.right_down = False
 
     def start(self):
         pass
@@ -343,15 +356,25 @@ class MouseFeet:
         import pygame
         return [pygame.mouse.get_pos()] if pygame.mouse.get_focused() else []  # seta fora: sem jogador
 
+    def pop_jump(self):
+        """True uma vez a cada clique do botao direito."""
+        import pygame
+        down = pygame.mouse.get_pressed()[2]
+        jumped, self.right_down = down and not self.right_down, down
+        return jumped
+
 
 class FeetTracker(threading.Thread):
     """Camera + MediaPipe numa thread: posicao de cada pe na tela do jogo.
 
     Cada pe e o calcanhar, levado da imagem da camera para a tela pela
-    calibracao do TTEA (mesma conta do KarTEA).
+    calibracao do TTEA (mesma conta do KarTEA). O pulo vem do quadril e dos
+    tornozelos na imagem (veja detect_jump).
     """
 
     HEELS = (29, 30)
+    HIPS = (23, 24)
+    ANKLES = (27, 28)
 
     def __init__(self, camera_index, backend, model_path, detection, presence, tracking,
                  corners, to_game, control_size, screen_size):
@@ -379,6 +402,18 @@ class FeetTracker(threading.Thread):
         self.seen_at = 0.0
         self.frame = None
         self.frame_id = 0
+        # pulo: posicao de pe (quadril, tornozelos), ultimo quadril visto (y, tempo)
+        self.base = None
+        self.last_hip = None
+        self.airborne = False  # no ar: os pes ficam onde sairam do chao
+        self.jump_at = 0.0
+        self.jumps = 0         # pulos ainda nao lidos pelo jogo
+
+    def pop_jump(self):
+        """True se o jogador pulou desde a ultima leitura."""
+        with self.lock:
+            jumped, self.jumps = self.jumps > 0, 0
+        return jumped
 
     def latest(self):
         """Posicao de cada pe (vazia se o jogador sumiu ha mais de LOST_AFTER)."""
@@ -439,7 +474,9 @@ class FeetTracker(threading.Thread):
         cv2 = self.cv2
         h, w = frame.shape[:2]
         feet = None
+        jumped = False
         if marks is not None:
+            jumped = self.detect_jump(marks, now)
             feet = [self.to_game(*self.camera_to_screen(marks[i].x, marks[i].y)) for i in self.HEELS]
             for i in self.HEELS:
                 cv2.circle(frame, (int(marks[i].x * w), int(marks[i].y * h)), 7, (0, 220, 255), -1)
@@ -449,9 +486,38 @@ class FeetTracker(threading.Thread):
             cv2.line(frame, quad[a], quad[b], (0, 255, 0), 2)
         with self.lock:
             if feet is not None:
-                self.feet, self.seen_at = feet, now
+                if not self.airborne:  # pe no ar nao pisa nas marcacoes
+                    self.feet = feet
+                self.seen_at = now
+            self.jumps += jumped
             self.frame = frame
             self.frame_id += 1
+
+    def detect_jump(self, marks, now):
+        """Pulo como no Herpules: quadril e tornozelos acima da posicao de pe,
+        com o quadril subindo rapido (y cresce para baixo na imagem). A posicao
+        de pe acompanha devagar o jogador no chao, porque ele anda entre as
+        marcacoes. Devolve True no quadro em que o pulo comeca."""
+        hip = sum(marks[i].y for i in self.HIPS) / 2
+        foot = sum(marks[i].y for i in self.ANKLES) / 2
+        if self.base is None:
+            self.base, self.last_hip = (hip, foot), (hip, now)
+            return False
+        base_hip, base_foot = self.base
+        last_y, last_t = self.last_hip
+        dt = max(1e-3, now - last_t)
+        rise = (last_y - hip) / dt
+        self.last_hip = (hip, now)
+        self.airborne = hip < base_hip - JUMP_HIP / 2
+        if not self.airborne:
+            k = min(1.0, dt * BASE_FOLLOW)
+            self.base = (base_hip + (hip - base_hip) * k, base_foot + (foot - base_foot) * k)
+        up = hip < base_hip - JUMP_HIP and foot < base_foot - JUMP_FEET
+        if up and rise > JUMP_RISE and now - self.jump_at > JUMP_COOLDOWN:
+            self.jump_at = now
+            log.info("pulo")
+            return True
+        return False
 
     def camera_to_screen(self, x, y):
         """Ponto normalizado (0 a 1) da camera -> pixel da tela (como o KarTEA)."""

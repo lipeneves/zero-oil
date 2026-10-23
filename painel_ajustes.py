@@ -86,6 +86,7 @@ class Panel:
         self.owner = {name: game_module if hasattr(game_module, name) else console_module
                       for name, *_ in GAME_PARAMS + CONSOLE_PARAMS}
         self.defaults = {name: getattr(module, name) for name, module in self.owner.items()}
+        self.profile_defaults = {"pes": dict(getattr(game_module, "FEET_DEFAULTS", {}))}  # padrao proprio do perfil
         self.view = (self.defaults["BOAT_Y"], self.defaults["CAM_ZOOM"])  # camera montada agora
         self.values = {"teclado": {}, "pes": {}, "console": {}}  # so o que difere do padrao
         self.open = False
@@ -108,14 +109,18 @@ class Panel:
     def profile(self):
         return PROFILES[self.app.feet]
 
+    def default(self, section, name):
+        """Padrao do parametro na secao: o do perfil, se ele tiver um, ou o do codigo."""
+        return self.profile_defaults.get(section, {}).get(name, self.defaults[name])
+
     def value(self, section, name):
-        return self.values[section].get(name, self.defaults[name])
+        return self.values[section].get(name, self.default(section, name))
 
     def set_value(self, section, spec, value):
         name, _, lo, hi, step = spec
         value = min(hi, max(lo, value))
         value = int(round(value)) if isinstance(self.defaults[name], int) else round(value, 4)
-        if value == self.defaults[name]:
+        if value == self.default(section, name):
             self.values[section].pop(name, None)
         else:
             self.values[section][name] = value
@@ -147,7 +152,7 @@ class Panel:
         for section, params in specs.items():
             for name, _, lo, hi, _ in params:
                 value = saved.get(section, {}).get(name)
-                if isinstance(value, (int, float)) and value != self.defaults[name]:
+                if isinstance(value, (int, float)) and value != self.default(section, name):
                     self.values[section][name] = min(hi, max(lo, value))
 
     def save(self):
@@ -184,7 +189,7 @@ class Panel:
                 self.apply()
                 self.save()
             else:
-                self.set_value(section, spec, self.defaults[spec[0]])
+                self.set_value(section, spec, self.default(section, spec[0]))
         elif ev.key == pygame.K_p:
             self.frozen = not self.frozen
         elif ev.key == pygame.K_TAB and self.app.console:

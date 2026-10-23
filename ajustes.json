@@ -1,8 +1,6 @@
 {
   "teclado": {},
   "pes": {
-    "SPEED_START": 5.25,
-    "SPEED_MAX": 11.25,
     "SPEED_GAIN": 0.1156,
     "SPEED_RIVER": 0.95,
     "TURN_SLOW": 0.5,
@@ -14,8 +12,8 @@
   },
   "console": {
     "PAD_W": 136,
+    "PAD_GAP": 175,
     "PAD_H": 112,
-    "PAD_GAP": 135,
     "PAD_Y": 565
   }
 }
