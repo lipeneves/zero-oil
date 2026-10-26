@@ -6,13 +6,14 @@
     "TURN_SLOW": 0.5,
     "TURN_RECOVER": 0.3,
     "CAM_FOLLOW": 13.0,
-    "LIVES_START": 2,
+    "CAM_ZOOM": 0.9,
     "BOAT_Y": 310,
-    "CAM_ZOOM": 0.9
+    "LIVES_START": 2,
+    "SPEED_START": 3.0,
+    "SPEED_MAX": 6.0
   },
   "console": {
     "PAD_W": 136,
-    "PAD_GAP": 175,
     "PAD_H": 112,
     "PAD_Y": 565
   }

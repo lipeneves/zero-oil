@@ -149,6 +149,9 @@ C:\Projects\ttea\.venv\Scripts\python C:\Projects\ttea\src\ttea\games\zerooil\ze
 Também dá para ligar a simulação com a variável de ambiente
 `ZEROOIL_SIMULAR_PES=1`. Ela vale inclusive quando o jogo é aberto pelo T-TEA.
 
+Na simulação o jogo abre numa janela comum, e a tela OPÇÕES mostra
+RESOLUÇÃO e TELA CHEIA, além de CONTROLE.
+
 Controles do teclado: setas esquerda/direita viram, Espaço pula, R recomeça a
 corrida e Esc pausa.
 
