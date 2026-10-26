@@ -63,7 +63,7 @@ SIMULATED_SCREEN = (1280, 720)  # simulacao sem calibracao: um projetor 16:9 com
 # altura) para cada lado das pegadas. Os valores podem mudar durante o jogo
 # (painel de ajustes, Ctrl+D): Console.layout_pads monta as posicoes de novo.
 PAD_W, PAD_H = 124, 88   # tamanho de cada seta
-PAD_GAP = 175            # distancia do meio da tela ate o meio de cada seta
+PAD_GAP = 200           # distancia do meio da tela ate o meio de cada seta
 PAD_Y = GAME_H + 130     # altura do meio das setas na tela
 STAND_W, STAND_H = 132, 84  # pegadas: parado aqui, o barco sai andando (um pouco abaixo das setas)
 BOAT_Y = 400        # linha da tela onde o barco encosta na agua (na tela 640 x 480: 309)

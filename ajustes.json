@@ -8,9 +8,7 @@
     "CAM_FOLLOW": 13.0,
     "CAM_ZOOM": 0.9,
     "BOAT_Y": 310,
-    "LIVES_START": 2,
-    "SPEED_START": 3.0,
-    "SPEED_MAX": 6.0
+    "LIVES_START": 2
   },
   "console": {
     "PAD_W": 136,
